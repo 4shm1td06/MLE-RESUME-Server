@@ -13,15 +13,6 @@ const serverRoot = path.resolve(__dirname, '..');
 const app = express();
 app.use(cors());
 
-const ALLOWED_ORIGINS = ['http://localhost:5173', 'http://localhost:5050', ...(process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean)];
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && !ALLOWED_ORIGINS.includes(origin) && process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Origin not allowed' });
-  }
-  next();
-});
-
 app.use(express.json({ limit: '10mb' }));
 app.use('/generated', express.static(path.join(serverRoot, 'generated')));
 app.use('/api/resumes', resumeRoutes);
