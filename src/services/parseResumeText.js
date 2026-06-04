@@ -105,11 +105,11 @@ async function requestOnce(prompt, model) {
         {
           role: 'system',
           content:
-            'You convert raw resume text into strict JSON for an MLE formatted resume. Return only valid JSON. No markdown. No explanations. Do not invent facts.'
+            'You convert raw resume text into strict JSON for an MLE formatted resume. Write in a natural human tone with varied sentence structure. Avoid overused phrases like "proven track record", "seasoned professional", or "results-driven". Use concrete, specific language. Return only valid JSON. No markdown. No explanations. Do not invent facts.'
         },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.1
+      temperature: 0.5
     })
   });
 
@@ -206,6 +206,7 @@ Rules:
 - candidateInitials should be derived from candidateName when possible.
 - Use empty string or empty arrays when data is missing.
 - Prefer recruiter-friendly concise wording.
+- Write in a natural human tone. Vary sentence structure across bullet points. Avoid clichés like "proven track record", "seasoned professional", or "results-driven". Use concrete, specific language.
 - Preserve company as Confidential when the source suggests masking or confidentiality.
 - If explicit "Project Experience" is missing, infer projects from employment history, implementation work, rollout work, support projects, migration work, integration work, greenfield work, UAT/testing assignments, SAP assignments, client engagements, and responsibility sections.
 - If explicit "Technical Experience" is missing, derive it from project, employment, implementation, support, or responsibility sections.

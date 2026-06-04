@@ -123,7 +123,7 @@ export function heuristicGrammarFix(data = {}) {
 export async function getAiGrammarFix(data = {}) {
   if (!apiKey) return null;
 
-  const prompt = `You are a resume editor. Fix grammar, spelling, capitalization, and awkward phrasing in the following resume JSON. Preserve all field names, structure, and meaning. Return ONLY valid JSON with no markdown or explanation. Do not add or remove fields. Do not change dates, company names, or proper nouns unless they have obvious typos.
+  const prompt = `You are a resume editor. Fix grammar, spelling, capitalization, and awkward phrasing in the following resume JSON. Rewrite in a natural human tone with varied sentence structure. Avoid overused phrases like "proven track record", "seasoned professional", or "results-driven". Use concrete, specific language. Preserve all field names, structure, and meaning. Return ONLY valid JSON with no markdown or explanation. Do not add or remove fields. Do not change dates, company names, or proper nouns unless they have obvious typos.
 
 Input:
 ${JSON.stringify(data, null, 2)}`;
@@ -138,7 +138,7 @@ ${JSON.stringify(data, null, 2)}`;
       body: JSON.stringify({
         model: 'openrouter/auto',
         messages: [{ role: 'user', content: prompt.slice(0, 25000) }],
-        temperature: 0.1,
+        temperature: 0.4,
         max_tokens: 8000
       })
     });
