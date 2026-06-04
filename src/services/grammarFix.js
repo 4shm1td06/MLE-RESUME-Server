@@ -1,8 +1,3 @@
-import 'dotenv/config';
-
-const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
 function fixCapitalization(text) {
   return text
     .replace(/(^\s*\w)|(\.\s*\w)/g, (c) => c.toUpperCase())
@@ -120,48 +115,6 @@ export function heuristicGrammarFix(data = {}) {
   return fixed;
 }
 
-export async function getAiGrammarFix(data = {}) {
-  if (!apiKey) return null;
-
-  const prompt = `You are a resume editor. Fix grammar, spelling, capitalization, and awkward phrasing in the following resume JSON. Rewrite in a natural human tone with varied sentence structure. Avoid overused phrases like "proven track record", "seasoned professional", or "results-driven". Use concrete, specific language. Preserve all field names, structure, and meaning. Return ONLY valid JSON with no markdown or explanation. Do not add or remove fields. Do not change dates, company names, or proper nouns unless they have obvious typos.
-
-Input:
-${JSON.stringify(data, null, 2)}`;
-
-  try {
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'openrouter/auto',
-        messages: [{ role: 'user', content: prompt.slice(0, 25000) }],
-        temperature: 0.4,
-        max_tokens: 8000
-      })
-    });
-
-    if (!response.ok) return null;
-
-    const result = await response.json();
-    const content = result?.choices?.[0]?.message?.content?.trim();
-    if (!content) return null;
-
-    const cleaned = content.replace(/```json\s*|```\s*/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch {
-    return null;
-  }
-}
-
 export async function grammarFix(data = {}) {
-  const aiResult = await getAiGrammarFix(data);
-  const heuristicResult = heuristicGrammarFix(data);
-
-  if (aiResult) {
-    return { data: aiResult, provider: 'openrouter' };
-  }
-  return { data: heuristicResult, provider: 'heuristic' };
+  return { data: heuristicGrammarFix(data), provider: 'heuristic' };
 }
