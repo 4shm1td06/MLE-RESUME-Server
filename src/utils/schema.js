@@ -579,13 +579,12 @@ function collectUnknownSections(input = {}) {
     if (Array.isArray(value) && value.length === 0) continue;
 
     if (Array.isArray(value)) {
-      const items = value.map((v) =>
-        typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)
-      ).filter(Boolean);
+      const items = value
+        .map((v) => (v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v)))
+        .filter(Boolean);
       if (items.length) sections.push({ title: key, items });
     } else if (typeof value === 'object' && value !== null) {
-      const items = Object.entries(value).map(([k, v]) => `${k}: ${v}`);
-      sections.push({ title: key, items });
+      sections.push({ title: key, items: [JSON.stringify(value, null, 2)] });
     } else {
       sections.push({ title: key, items: [String(value)] });
     }

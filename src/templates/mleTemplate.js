@@ -191,7 +191,7 @@ function renderDynamicSections(sections = []) {
   return sections
     .map((s) => {
       if (!s || !s.title || !Array.isArray(s.items) || s.items.length === 0) return '';
-      return renderSection(esc(s.title), renderBulletList(s.items));
+      return renderSection(s.title, renderBulletList(s.items));
     })
     .join('');
 }
