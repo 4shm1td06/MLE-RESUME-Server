@@ -1,6 +1,13 @@
 import fs from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import os from 'os';
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse';
+import Tesseract from 'tesseract.js';
+
+const execFileAsync = promisify(execFile);
 
 function cleanText(input = '') {
   return String(input)
@@ -49,11 +56,57 @@ async function parsePdfQuietly(buffer) {
   }
 }
 
+async function ocrPdf(buffer) {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'resume-ocr-'));
+  const inputPath = path.join(tmpDir, 'input.pdf');
+  await fs.writeFile(inputPath, buffer);
+
+  try {
+    await execFileAsync('pdftoppm', [
+      '-png',
+      '-r', '300',
+      inputPath,
+      path.join(tmpDir, 'page'),
+    ]);
+
+    const files = await fs.readdir(tmpDir);
+    const pageFiles = files
+      .filter((f) => f.endsWith('.png'))
+      .sort();
+
+    const texts = await Promise.all(
+      pageFiles.map(async (file) => {
+        const imageBuf = await fs.readFile(path.join(tmpDir, file));
+        const { data } = await Tesseract.recognize(imageBuf, 'eng', {
+          logger: () => {},
+        });
+        return data.text || '';
+      }),
+    );
+
+    return cleanText(texts.join('\n\n'));
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      throw new Error(
+        'OCR is not available on this server (pdftoppm not found). ' +
+        'Install poppler-utils or use a digital (text-based) PDF.',
+      );
+    }
+    throw err;
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
 export async function extractTextFromResume({ filePath, mimeType }) {
   const buffer = await fs.readFile(filePath);
 
   if (mimeType === 'application/pdf') {
-    return await parsePdfQuietly(buffer);
+    const text = await parsePdfQuietly(buffer);
+    if (text.replace(/\s/g, '').length > 50) {
+      return text;
+    }
+    return await ocrPdf(buffer);
   }
 
   if (

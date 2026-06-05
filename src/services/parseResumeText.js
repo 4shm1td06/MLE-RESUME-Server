@@ -76,7 +76,9 @@ export async function parseResumeText(extractedText = '') {
     };
   }
 
-  const prompt = `Extract information from the following resume text and return it as valid JSON matching this schema. Do NOT rewrite, rephrase, paraphrase, or improve any text. Copy the original wording exactly as it appears in the resume. Preserve all phrasing, bullet points, and sentence structure verbatim.
+  const prompt = `Act as an ATS resume parser. Extract the skills, work history timelines, and core achievements from the plain text pasted below into a structured format, without adding any systemic metadata.
+
+Extract information from the following resume text and return it as valid JSON matching this schema. Do NOT rewrite, rephrase, paraphrase, or improve any text. Copy the original wording exactly as it appears in the resume. Preserve all phrasing, bullet points, and sentence structure verbatim.
 
 Schema:
 {
