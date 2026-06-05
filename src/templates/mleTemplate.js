@@ -186,6 +186,16 @@ function renderSection(title, content) {
   `;
 }
 
+function renderDynamicSections(sections = []) {
+  if (!Array.isArray(sections) || sections.length === 0) return '';
+  return sections
+    .map((s) => {
+      if (!s || !s.title || !Array.isArray(s.items) || s.items.length === 0) return '';
+      return renderSection(esc(s.title), renderBulletList(s.items));
+    })
+    .join('');
+}
+
 export function buildResumeHtml(data = {}) {
   const masked = Boolean(data.maskPersonalDetails);
   const name = resolveName(data, masked);
@@ -554,6 +564,7 @@ export function buildResumeHtml(data = {}) {
       ${experienceSection}
       ${certificationsSection}
       ${keyAchievementsSection}
+      ${renderDynamicSections(data.additionalSections)}
 
     </div>
   </div>

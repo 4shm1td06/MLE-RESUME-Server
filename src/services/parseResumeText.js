@@ -76,51 +76,16 @@ export async function parseResumeText(extractedText = '') {
     };
   }
 
-  const prompt = `Act as an ATS resume parser. Extract the skills, work history timelines, and core achievements from the plain text pasted below into a structured format, without adding any systemic metadata.
+  const prompt = `Analyze the following resume text and return a comprehensive JSON object that captures ALL information in the resume. Do NOT rewrite, rephrase, paraphrase, or improve any text. Copy the original wording exactly as it appears in the resume. Preserve all phrasing, bullet points, and sentence structure verbatim.
 
-Extract information from the following resume text and return it as valid JSON matching this schema. Do NOT rewrite, rephrase, paraphrase, or improve any text. Copy the original wording exactly as it appears in the resume. Preserve all phrasing, bullet points, and sentence structure verbatim.
-
-Schema:
-{
-  "candidateName": "",
-  "candidateInitials": "",
-  "title": "",
-  "phone": "",
-  "email": "",
-  "location": "",
-  "linkedin": "",
-  "totalExperience": "",
-  "currentCompany": "",
-  "currentDesignation": "",
-  "noticePeriod": "",
-  "currentCtc": "",
-  "expectedCtc": "",
-  "highestQualification": "",
-  "dateOfBirth": "",
-  "nationality": "",
-  "languagesKnown": [""],
-  "domainExperience": [""],
-  "toolsAndPlatforms": [""],
-  "keyAchievements": [""],
-  "professionalSummary": [""],
-  "expertise": [""],
-  "educationalQualification": [""],
-  "skillGroups": [{"title": "", "items": [""]}],
-  "workHistory": [{"company": "Confidential", "role": "", "duration": ""}],
-  "technicalExperience": [{"role": "", "company": "", "client": "", "duration": "", "environment": [""], "contributions": [""]}],
-  "projects": [{"name": "", "role": "", "duration": "", "technologies": [""], "highlights": [""]}],
-  "certifications": [""],
-  "additionalSections": [{"title": "", "items": [""]}],
-  "confidentialLabel": "Confidential",
-  "maskPersonalDetails": true
-}
+Do not use a fixed schema. Instead, infer the structure from the resume content itself. Use field names that match the resume's actual section headings. Every section, bullet, and detail from the resume must appear in the output.
 
 Rules:
-- CRITICAL: Copy text verbatim from the resume. Do not change any wording.
-- Do not invent facts not present in the text.
-- candidateInitials should be derived from candidateName when possible.
-- Use empty string or empty arrays when data is missing.
-- Preserve company as Confidential when the source suggests masking.
+- CRITICAL: Copy text verbatim. Never change wording.
+- Include ALL content — nothing omitted.
+- Represent contact information with clear field names (e.g., candidateName, email, phone, linkedin).
+- Use arrays for lists, objects with named fields for structured entries.
+- Return only valid JSON. No markdown. No explanations.
 
 Resume text:
 ${extractedText.slice(0, 25000)}`;
