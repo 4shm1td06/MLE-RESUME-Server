@@ -55,11 +55,23 @@ export async function parseResumeController(req, res) {
 export async function generatePdfController(req, res) {
   try {
     const data = normalizeResume(req.body || {});
-    const html = buildResumeHtml(data);
+    const rawText = req.body?.rawText || '';
+
     const fileName = `mle-resume-${Date.now()}.pdf`;
     const outputPath = path.join(generatedDir, fileName);
-    await generatePdf({ html, outputPath });
-    return res.json({ success: true, pdfUrl: `/generated/${fileName}` });
+
+    const html = buildResumeHtml(data);
+
+    const [atsScore] = await Promise.all([
+      getAtsScore(data, rawText).catch(() => null),
+      generatePdf({ html, outputPath }),
+    ]);
+
+    return res.json({
+      success: true,
+      pdfUrl: `/generated/${fileName}`,
+      atsScore,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message || 'Failed to generate PDF.' });
