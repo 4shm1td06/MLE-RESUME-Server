@@ -23,7 +23,7 @@ function pickArray(ai, fb) {
 }
 
 function mergeResumeData(fallback, parsed) {
-  const ai = normalizeResume(parsed || {});
+  const ai = normalizeResume(parsed || {}, { verbatim: true });
   const fb = normalizeResume(fallback || {});
 
   return normalizeResume({
@@ -63,7 +63,7 @@ function mergeResumeData(fallback, parsed) {
         : typeof fb.maskPersonalDetails === 'boolean'
           ? fb.maskPersonalDetails
           : true
-  });
+  }, { verbatim: true });
 }
 
 export async function parseResumeText(extractedText = '') {
@@ -76,15 +76,21 @@ export async function parseResumeText(extractedText = '') {
     };
   }
 
-  const prompt = `Analyze the following resume text and return a comprehensive JSON object that captures ALL information in the resume. Do NOT rewrite, rephrase, paraphrase, or improve any text. Copy the original wording exactly as it appears in the resume. Preserve all phrasing, bullet points, and sentence structure verbatim.
+  const prompt = `Analyze the following resume text and return a comprehensive JSON object that captures ALL information in the resume.
 
-Do not use a fixed schema. Instead, infer the structure from the resume content itself. Use field names that match the resume's actual section headings. Every section, bullet, and detail from the resume must appear in the output.
+CRITICAL — EXACT COPY RULES:
+- Copy EVERY character exactly: wording, punctuation, spaces, line breaks, and indentation must match the original resume.
+- Do NOT fix grammar, spelling, or formatting.
+- Do NOT add, remove, or rephrase text.
+- Do NOT add or remove newlines.
+- Preserve original line breaks and bullet points exactly as they appear.
+
+Do not use a fixed schema. Infer the structure from the resume content itself. Use field names that match the resume's actual section headings. Every section, bullet, and detail from the resume must appear in the output.
+
+For contact information, use these field names: candidateName, title, phone, email, linkedin, location.
 
 Rules:
-- CRITICAL: Copy text verbatim. Never change wording.
 - Include ALL content — nothing omitted.
-- Represent contact information with clear field names (e.g., candidateName, email, phone, linkedin).
-- Use arrays for lists, objects with named fields for structured entries.
 - Return only valid JSON. No markdown. No explanations.
 
 Resume text:
@@ -104,7 +110,7 @@ ${extractedText.slice(0, 25000)}`;
         messages: [
           {
             role: 'system',
-            content: 'You extract resume text into JSON. Copy wording verbatim — never rewrite, rephrase, or improve. Return only valid JSON. No markdown. No explanations.'
+            content: 'You extract resume text into JSON. Copy every character exactly — never fix grammar, never rephrase, never add or remove newlines. Return only valid JSON. No markdown. No explanations.'
           },
           { role: 'user', content: prompt }
         ],

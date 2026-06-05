@@ -79,7 +79,7 @@ function renderBulletList(items = [], className = '') {
 }
 
 
-function renderWorkHistoryRows(rows = [], masked = true) {
+function renderWorkHistoryRows(rows = [], masked = true, label = 'Confidential') {
   const safe = (Array.isArray(rows) ? rows : [])
     .map((row) => ({
       company: safeText(row?.company),
@@ -94,7 +94,7 @@ function renderWorkHistoryRows(rows = [], masked = true) {
     .map(
       (row) => `
         <tr>
-          <td>${esc(masked ? 'Confidential' : (row.company || 'Confidential'))}</td>
+          <td>${esc(masked ? label : (row.company || label))}</td>
           <td>${esc(row.role || '—')}</td>
           <td>${esc(row.duration || '—')}</td>
         </tr>
@@ -104,6 +104,8 @@ function renderWorkHistoryRows(rows = [], masked = true) {
 }
 
 function renderExperienceBlocks(blocks = [], masked = true) {
+  // INTENTIONAL: client name is always shown even when masked=true —
+  // the candidate identifies the client, not themselves.
   const safe = (Array.isArray(blocks) ? blocks : [])
     .map((block) => ({
       role: safeText(block?.role),
@@ -274,7 +276,7 @@ export function buildResumeHtml(data = {}) {
               </tr>
             </thead>
             <tbody>
-              ${renderWorkHistoryRows(data.workHistory, masked)}
+              ${renderWorkHistoryRows(data.workHistory, masked, data.confidentialLabel || 'Confidential')}
             </tbody>
           </table>
         `

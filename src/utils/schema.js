@@ -190,6 +190,13 @@ function firstNonEmptyText(...values) {
   return '';
 }
 
+function firstNonEmptyTextRaw(...values) {
+  for (const value of values) {
+    if (value && typeof value === 'string' && value.trim()) return value;
+  }
+  return '';
+}
+
 function firstNonEmptyList(...values) {
   for (const value of values) {
     const cleaned = uniqueList(value);
@@ -624,9 +631,63 @@ const DEFAULT_RESUME = {
 
 };
 
-export function normalizeResume(input = {}) {
+export function normalizeResume(input = {}, options = {}) {
   const data = mapAliases(input);
   const rawText = input.rawText || data.rawText || '';
+
+  if (options.verbatim) {
+    const asArray = (v) => (Array.isArray(v) ? v : []);
+
+    return {
+      ...DEFAULT_RESUME,
+      candidateName: firstNonEmptyTextRaw(data.candidateName, data.name, data.fullName),
+      candidateInitials: firstNonEmptyTextRaw(
+        data.candidateInitials,
+        buildInitials(firstNonEmptyTextRaw(data.candidateName, data.name, '')),
+      ),
+      title: firstNonEmptyTextRaw(data.title, data.jobTitle, data.professionalTitle, data.designation, data.currentRole),
+      phone: firstNonEmptyTextRaw(data.phone, data.mobile, data.contactNumber, data.mobileNumber),
+      email: firstNonEmptyTextRaw(data.email, data.emailAddress),
+      linkedin: firstNonEmptyTextRaw(data.linkedin, data.linkedinUrl, data.linkedIn, data.linkedInUrl),
+      location: firstNonEmptyTextRaw(data.location, data.city, data.address, data.currentLocation),
+      totalExperience: firstNonEmptyTextRaw(data.totalExperience),
+      currentCompany: firstNonEmptyTextRaw(data.currentCompany),
+      currentDesignation: firstNonEmptyTextRaw(data.currentDesignation),
+      noticePeriod: firstNonEmptyTextRaw(data.noticePeriod),
+      currentCtc: firstNonEmptyTextRaw(data.currentCtc),
+      expectedCtc: firstNonEmptyTextRaw(data.expectedCtc),
+      highestQualification: firstNonEmptyTextRaw(data.highestQualification),
+      domainExperience: asArray(data.domainExperience),
+      toolsAndPlatforms: asArray(data.toolsAndPlatforms),
+      languagesKnown: asArray(data.languagesKnown),
+      professionalSummary: asArray(
+        data.professionalSummary || data.summary || data.profileSummary || data.careerSummary || data.executiveSummary || data.objective,
+      ),
+      expertise: asArray(
+        data.expertise || data.coreExpertise || data.coreCompetencies || data.specializations || data.highlights || data.strengths,
+      ),
+      educationalQualification: asArray(
+        data.educationalQualification || data.education || data.academicQualification || data.qualifications || data.academicBackground,
+      ),
+      skillGroups: asArray(data.skillGroups || data.skills || data.technicalSkills || data.coreSkills || data.keySkills || data.techStack),
+      workHistory: asArray(data.workHistory || data.employmentHistory || data.careerHistory),
+      technicalExperience: asArray(
+        data.technicalExperience || data.projectExperience || data.professionalExperience || data.workExperience || data.relevantExperience,
+      ),
+      certifications: asArray(
+        data.certifications || data.Certifications || data.certificates || data.certs || data.licenses || data.licences || data.courses || data.professionalCertifications,
+      ),
+      keyAchievements: asArray(
+        data.keyAchievements || data.achievements || data.accomplishments || data.awards || data.keyHighlights || data.careerHighlights,
+      ),
+      additionalSections: [
+        ...(Array.isArray(data.additionalSections) ? data.additionalSections : []),
+        ...collectUnknownSections(input),
+      ],
+      confidentialLabel: firstNonEmptyTextRaw(data.confidentialLabel, DEFAULT_RESUME.confidentialLabel),
+      maskPersonalDetails: Boolean(data.maskPersonalDetails),
+    };
+  }
 
   const technicalExperience = cleanExperienceBlocks(data.technicalExperience);
   const projectExperience = cleanExperienceBlocks(data.projectExperience);
