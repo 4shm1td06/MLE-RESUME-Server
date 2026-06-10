@@ -1,3 +1,5 @@
+import { stripInstitutionName } from '../utils/stripInstitutionName.js';
+
 function esc(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -128,21 +130,6 @@ function renderExperienceBlocks(blocks = []) {
       }
     )
     .join('');
-}
-
-function stripInstitutionName(text) {
-  const s = String(text ?? '').trim();
-  if (!s) return '';
-  const dateMatch = s.match(/\(([^)]+)\)\s*$/);
-  const dateRange = dateMatch ? `(${dateMatch[1]})` : '';
-  const before = dateMatch ? s.slice(0, dateMatch.index).replace(/[,\s]+$/, '') : s;
-  const fromMatch = before.match(/^(.*?)\s+from\s+(.*)$/i);
-  if (fromMatch) return `${fromMatch[1].trim()} ${dateRange}`.trim();
-  const firstComma = before.indexOf(',');
-  if (firstComma > 0) return `${before.slice(0, firstComma).trim()} ${dateRange}`.trim();
-  const dashMatch = before.match(/^(.*?)\s+[-–—]\s+(.*)$/);
-  if (dashMatch) return `${dashMatch[1].trim()} ${dateRange}`.trim();
-  return `${before} ${dateRange}`.trim();
 }
 
 function resolveName(data = {}, masked = true) {

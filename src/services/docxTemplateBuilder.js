@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import PizZip from 'pizzip';
+import { stripInstitutionName } from '../utils/stripInstitutionName.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -240,15 +241,7 @@ export async function buildFromTemplate(data) {
     bodyXml += sectionTitleText('Educational Qualification', firstSection);
     firstSection = false;
     const items = masked
-      ? data.educationalQualification.map(e => {
-          const s = String(e ?? '').trim();
-          const dateMatch = s.match(/\(([^)]+)\)\s*$/);
-          if (!dateMatch) return s;
-          const before = s.slice(0, dateMatch.index).replace(/[,\s]+$/, '');
-          const firstComma = before.indexOf(',');
-          if (firstComma > 0) return `${before.slice(0, firstComma).trim()} ${dateMatch[0]}`.trim();
-          return `${before} ${dateMatch[0]}`.trim();
-        })
+      ? data.educationalQualification.map(e => stripInstitutionName(e))
       : data.educationalQualification;
     items.forEach(item => { bodyXml += bulletItemText(item); });
   }
