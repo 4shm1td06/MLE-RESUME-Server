@@ -11,7 +11,7 @@ function buildAiPrompt(rawText) {
   return `Extract resume data as JSON. Rules:
 1. Extract exact text, do NOT paraphrase or rewrite.
 2. For projects: copy each bullet point into highlights[] as written.
-3. Skills: extract individual skill names only.
+3. Skills: group them by category (e.g. Operating Systems, Cloud, Networking, Tools).
 4. Work experience: each role is a separate entry; copy bullet points into highlights[].
 5. Education: each degree is a separate entry.
 6. Certifications: exact names.
