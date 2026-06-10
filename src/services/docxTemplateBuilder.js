@@ -204,7 +204,7 @@ export async function buildFromTemplate(data) {
   if (!bodyMatch) throw new Error('Could not find body in document.xml');
   const fullBody = bodyMatch[1];
 
-  const sectPrMatch = fullBody.match(/<w:sectPr>[\s\S]*?<\/w:sectPr>/);
+  const sectPrMatch = fullBody.match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
   const sectPr = sectPrMatch ? sectPrMatch[0] : '';
 
   // Generate all body content from scratch (matching PDF formatting exactly)
