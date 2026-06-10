@@ -1,142 +1,164 @@
-import 'dotenv/config';
 import { heuristicParseResume } from './resumeHeuristics.js';
-import { normalizeResume } from '../utils/schema.js';
+import { normalizeToAffindaSchema } from '../utils/affindaSchema.js';
+import { postProcessResume } from '../utils/postProcess.js';
+import JSON5 from 'json5';
 
-const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-function extractJson(text = '') {
-  const cleaned = String(text)
-    .replace(/```json/gi, '')
+const apiKey = (process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY)?.trim();
+const AI_URL = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+
+function buildAiPrompt(rawText) {
+  return `Extract resume data as JSON. Rules:
+1. Extract exact text, do NOT paraphrase or rewrite.
+2. For projects: copy each bullet point into highlights[] as written.
+3. Skills: extract individual skill names only.
+4. Work experience: each role is a separate entry; copy bullet points into highlights[].
+5. Education: each degree is a separate entry.
+6. Certifications: exact names.
+7. Name: full name as written.
+8. Summary: copy the entire professional summary section.
+9. Key achievements: copy each key achievement / accomplishment bullet point into achievements[].
+
+Schema: candidateName{fullName}, email[], phoneNumber[], location{formatted}, summary, skills[], workExperience[{jobTitle,organization,dateRange,highlights[]}], education[{accreditation,organization,dateRange}], certifications[], projects[{title,technologies[],highlights[]}], achievements[]
+
+Text:
+${rawText}`.trim();
+}
+
+async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
+  const timeoutMs = 45000 + (attempt - 1) * 10000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  const response = await fetch(AI_URL, {
+    method: 'POST',
+    signal: controller.signal,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'mixtral-8x7b-32768',
+      messages: [
+        { role: 'system', content: 'You are a resume parser. Return only valid JSON. No markdown. No explanations.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.1,
+      max_tokens: 8192
+    })
+  });
+  clearTimeout(timeout);
+
+  if (response.status === 429 && attempt <= maxRetries) {
+    const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+    console.error(`Rate limited (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+    await new Promise(r => setTimeout(r, delay));
+    return callAiParser(prompt, attempt + 1, maxRetries);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`OpenRouter parsing request failed: ${response.status} ${errorText}`);
+  }
+
+  const json = await response.json();
+  const text = json?.choices?.[0]?.message?.content || '';
+  if (!text) throw new Error('OpenRouter returned empty parsing result');
+
+  let jsonStr = text
+    .replace(/```json\s*/gi, '')
     .replace(/```/g, '')
     .trim();
-  return JSON.parse(cleaned);
-}
 
-function pickString(ai, fb) {
-  return typeof ai === 'string' && ai.trim() ? ai.trim() : (fb ?? '');
-}
+  const braceStart = jsonStr.indexOf('{');
+  if (braceStart < 0) {
+    console.error('AI response: no JSON object found. Raw preview:', text.slice(0, 600));
+    throw new Error('No JSON object in AI response');
+  }
+  jsonStr = jsonStr.slice(braceStart);
 
-function pickArray(ai, fb) {
-  if (Array.isArray(ai) && ai.some(Boolean)) return ai;
-  return Array.isArray(fb) ? fb : [];
-}
+  let braceDepth = 0;
+  let jsonEnd = -1;
+  for (let i = 0; i < jsonStr.length; i++) {
+    if (jsonStr[i] === '{') braceDepth++;
+    else if (jsonStr[i] === '}') {
+      braceDepth--;
+      if (braceDepth === 0) { jsonEnd = i; break; }
+    }
+  }
+  if (jsonEnd < 0) {
+    console.error('AI response JSON truncated (unclosed braces). Raw preview:', text.slice(0, 600));
+    throw new Error('Truncated JSON in AI response (no closing brace)');
+  }
+  jsonStr = jsonStr.slice(0, jsonEnd + 1);
 
-function mergeResumeData(fallback, parsed) {
-  const ai = normalizeResume(parsed || {}, { verbatim: true });
-  const fb = normalizeResume(fallback || {});
+  const cleaned = jsonStr
+    .replace(/\,\s*\]/g, ']')
+    .replace(/\,\s*\}/g, '}')
+    .trim();
 
-  return normalizeResume({
-    candidateName: pickString(ai.candidateName, fb.candidateName),
-    candidateInitials: pickString(ai.candidateInitials, fb.candidateInitials),
-    title: pickString(ai.title, fb.title),
-    phone: pickString(ai.phone, fb.phone),
-    email: pickString(ai.email, fb.email),
-    location: pickString(ai.location, fb.location),
-    linkedin: pickString(ai.linkedin, fb.linkedin),
-    totalExperience: pickString(ai.totalExperience, fb.totalExperience),
-    currentCompany: pickString(ai.currentCompany, fb.currentCompany),
-    currentDesignation: pickString(ai.currentDesignation, fb.currentDesignation),
-    noticePeriod: pickString(ai.noticePeriod, fb.noticePeriod),
-    currentCtc: pickString(ai.currentCtc, fb.currentCtc),
-    expectedCtc: pickString(ai.expectedCtc, fb.expectedCtc),
-    highestQualification: pickString(ai.highestQualification, fb.highestQualification),
-    dateOfBirth: pickString(ai.dateOfBirth, fb.dateOfBirth),
-    nationality: pickString(ai.nationality, fb.nationality),
-    languagesKnown: pickArray(ai.languagesKnown, fb.languagesKnown),
-    domainExperience: pickArray(ai.domainExperience, fb.domainExperience),
-    toolsAndPlatforms: pickArray(ai.toolsAndPlatforms, fb.toolsAndPlatforms),
-    keyAchievements: pickArray(ai.keyAchievements, fb.keyAchievements),
-    professionalSummary: pickArray(ai.professionalSummary, fb.professionalSummary),
-    expertise: pickArray(ai.expertise, fb.expertise),
-    educationalQualification: pickArray(ai.educationalQualification, fb.educationalQualification),
-    skillGroups: pickArray(ai.skillGroups, fb.skillGroups),
-    workHistory: pickArray(ai.workHistory, fb.workHistory),
-    technicalExperience: pickArray(ai.technicalExperience, fb.technicalExperience),
-    projects: pickArray(ai.projects, fb.projects),
-    certifications: pickArray(ai.certifications, fb.certifications),
-    additionalSections: pickArray(ai.additionalSections, fb.additionalSections),
-    confidentialLabel: pickString(ai.confidentialLabel, fb.confidentialLabel || 'Confidential'),
-    maskPersonalDetails:
-      typeof ai.maskPersonalDetails === 'boolean'
-        ? ai.maskPersonalDetails
-        : typeof fb.maskPersonalDetails === 'boolean'
-          ? fb.maskPersonalDetails
-          : true
-  }, { verbatim: true });
+  function tryParse(s) {
+    try { return JSON.parse(s); } catch { try { return JSON5.parse(s); } catch { return null; } }
+  }
+
+  const ascii = cleaned.replace(/[^\x20-\x7E]+/g, '');
+  let parsed = tryParse(cleaned) || tryParse(ascii);
+
+  if (!parsed) {
+    console.error('AI response could not be parsed after cleaning. Raw JSON:', jsonStr.slice(0, 600));
+    throw new Error('Failed to parse AI response as JSON');
+  }
+
+
+  const isEmpty = !parsed.skills?.length && !parsed.workExperience?.length && !parsed.education?.length && !parsed.certifications?.length;
+  const hasSwappedFields = (parsed.workExperience || []).some(w => {
+    const title = (w.jobTitle || '').trim();
+    const org = (w.organization || '').trim();
+    return (!title || title === '—' || title === '-') && /engineer|developer|manager|analyst|intern/i.test(org);
+  });
+
+  if (attempt <= maxRetries && (isEmpty || hasSwappedFields)) {
+    const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+    await new Promise(r => setTimeout(r, delay));
+    return callAiParser(prompt, attempt + 1, maxRetries);
+  }
+
+  return parsed;
 }
 
 export async function parseResumeText(extractedText = '') {
-  const heuristic = normalizeResume(heuristicParseResume(extractedText));
+  let data;
+  let source;
 
-  if (!apiKey) {
-    return {
-      data: heuristic,
-      meta: { apiUsed: false, fallbackUsed: true, reason: 'OPENROUTER_API_KEY missing', provider: 'fallback_only', model: null }
-    };
+  function scoreData(d) {
+    return (d.skills?.length || 0) + (d.projects?.length || 0) + (d.workExperience || []).filter(w => w.organization && w.jobTitle && w.jobTitle !== '—').length + (d.education?.length || 0);
   }
 
-  const prompt = `Analyze the following resume text and return a comprehensive JSON object that captures ALL information in the resume.
-
-CRITICAL — EXACT COPY RULES:
-- Copy EVERY character exactly: wording, punctuation, spaces, line breaks, and indentation must match the original resume.
-- Do NOT fix grammar, spelling, or formatting.
-- Do NOT add, remove, or rephrase text.
-- Do NOT add or remove newlines.
-- Preserve original line breaks and bullet points exactly as they appear.
-
-Do not use a fixed schema. Infer the structure from the resume content itself. Use field names that match the resume's actual section headings. Every section, bullet, and detail from the resume must appear in the output.
-
-For contact information, use these field names: candidateName, title, phone, email, linkedin, location.
-
-Rules:
-- Include ALL content — nothing omitted.
-- Return only valid JSON. No markdown. No explanations.
-
-Resume text:
-${extractedText.slice(0, 25000)}`;
-
-  try {
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:5050',
-        'X-Title': process.env.OPENROUTER_APP_NAME || 'MLE Resume Formatter'
-      },
-      body: JSON.stringify({
-        model: 'openrouter/auto',
-        messages: [
-          {
-            role: 'system',
-            content: 'You extract resume text into JSON. Copy every character exactly — never fix grammar, never rephrase, never add or remove newlines. Return only valid JSON. No markdown. No explanations.'
-          },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1
-      })
-    });
-
-    if (!response.ok) throw new Error(`OpenRouter request failed: ${response.status}`);
-
-    const json = await response.json();
-    const text = json?.choices?.[0]?.message?.content || '';
-    if (!text) throw new Error('Empty response');
-
-    const parsed = extractJson(text);
-    const merged = mergeResumeData(heuristic, parsed);
-
-    return {
-      data: merged,
-      meta: { apiUsed: true, fallbackUsed: false, reason: null, provider: 'openrouter', model: json?.model || 'openrouter/auto' }
-    };
-  } catch (error) {
-    console.error(error);
-
-    return {
-      data: heuristic,
-      meta: { apiUsed: false, fallbackUsed: true, reason: error.message, provider: 'fallback_only', model: null }
-    };
+  if (apiKey) {
+    const prompt = buildAiPrompt(extractedText);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+        const raw = await callAiParser(prompt);
+        const candidate = normalizeToAffindaSchema(raw);
+        if (!data || scoreData(candidate) > scoreData(data)) {
+          data = candidate;
+          source = 'ai';
+        }
+        if (data.skills?.length && data.workExperience?.some(w => w.organization && w.jobTitle && w.jobTitle !== '—')) break;
+      } catch (error) {
+        console.error(`AI attempt ${attempt + 1} failed:`, error.message);
+      }
+    }
+    if (!data) {
+      throw new Error('AI parsing failed after 2 attempts');
+    }
+  } else {
+    source = 'heuristic';
+    data = normalizeToAffindaSchema(heuristicParseResume(extractedText));
   }
+
+  data = postProcessResume(data, extractedText, source);
+
+  return { data, source };
 }

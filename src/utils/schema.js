@@ -1,10 +1,15 @@
 function cleanText(value = '') {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
+  return String(value ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function cleanList(items = []) {
   if (Array.isArray(items)) {
-    return items.map((item) => cleanText(item)).filter(Boolean);
+    return items.map((item) => {
+      if (typeof item === 'object' && item !== null) {
+        return cleanText(item.summary || item.text || item.description || item.name || JSON.stringify(item));
+      }
+      return cleanText(item);
+    }).filter(Boolean);
   }
 
   if (typeof items === 'string') {
@@ -13,6 +18,28 @@ function cleanList(items = []) {
   }
 
   return [];
+}
+
+function flattenItems(items = []) {
+  if (!Array.isArray(items)) {
+    if (typeof items === 'string') return cleanText(items) ? [cleanText(items)] : [];
+    return [];
+  }
+  const result = [];
+  for (const item of items) {
+    if (typeof item === 'object' && item !== null) {
+      if (Array.isArray(item.highlights) && item.highlights.length) {
+        for (const h of item.highlights) result.push(cleanText(h));
+      } else {
+        const text = cleanText(item.summary || item.text || item.description || item.name || '');
+        if (text) result.push(text);
+      }
+    } else {
+      const text = cleanText(item);
+      if (text) result.push(text);
+    }
+  }
+  return result.filter(Boolean);
 }
 
 function uniqueList(items = []) {
@@ -126,7 +153,7 @@ function cleanExperienceBlocks(blocks = []) {
           block?.timeline
       );
 
-      const contributions = uniqueList(
+      const contributions = flattenItems(
         block?.contributions ||
           block?.responsibilities ||
           block?.highlights ||
@@ -286,6 +313,7 @@ function extractProjectsFromRawText(rawText = '') {
   const projectSignals =
     /project detail|project description|client name|responsibilit(y|ies)|tasks|contribution|implementation|support project|green field|brown field|rollout|migration/i;
 
+  let prevLine = '';
   for (const line of lines) {
     if (startPattern.test(line)) {
       if (current) projects.push(current);
@@ -335,7 +363,7 @@ function extractProjectsFromRawText(rawText = '') {
       continue;
     }
 
-    if (!current.client && /^[a-z0-9&(),.\-/' ]{2,}$/i.test(line) && /client/i.test(lines[Math.max(0, lines.indexOf(line) - 1)] || '')) {
+    if (!current.client && /^[a-z0-9&(),.\-/' ]{2,}$/i.test(line) && /client/i.test(prevLine)) {
       current.client = line;
       continue;
     }
@@ -345,6 +373,8 @@ function extractProjectsFromRawText(rawText = '') {
     } else {
       current.contributions.push(line);
     }
+
+    prevLine = line;
   }
 
   if (current) projects.push(current);
@@ -848,9 +878,9 @@ export function normalizeResume(input = {}, options = {}) {
     currentCtc: firstNonEmptyText(data.currentCtc),
     expectedCtc: firstNonEmptyText(data.expectedCtc),
     highestQualification: firstNonEmptyText(data.highestQualification),
-    domainExperience: firstNonEmptyArray(data.domainExperience),
-    toolsAndPlatforms: firstNonEmptyArray(data.toolsAndPlatforms),
-    languagesKnown: firstNonEmptyArray(data.languagesKnown),
+    domainExperience: Array.isArray(data.domainExperience) ? data.domainExperience : [],
+    toolsAndPlatforms: Array.isArray(data.toolsAndPlatforms) ? data.toolsAndPlatforms : [],
+    languagesKnown: Array.isArray(data.languagesKnown) ? data.languagesKnown : [],
     additionalSections: [
       ...(Array.isArray(data.additionalSections) ? data.additionalSections : []),
       ...collectUnknownSections(input),

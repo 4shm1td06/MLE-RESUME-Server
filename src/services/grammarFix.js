@@ -116,5 +116,5 @@ export function heuristicGrammarFix(data = {}) {
 }
 
 export async function grammarFix(data = {}) {
-  return { data: heuristicGrammarFix(data), provider: 'heuristic' };
+  return { data: heuristicGrammarFix(data) };
 }

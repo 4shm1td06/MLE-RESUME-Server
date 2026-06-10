@@ -53,8 +53,7 @@ const MARGIN_BOTTOM_MM = FOOTER_HEIGHT_MM + FOOTER_GAP_MM;
 
 export async function generatePdf({
   html,
-  outputPath,
-  confidentialLabel = 'Confidential'
+  outputPath
 }) {
   const launchOptions = {
     headless: true,
@@ -73,6 +72,7 @@ export async function generatePdf({
 
   try {
     const page = await browser.newPage();
+    page.setDefaultTimeout(30_000);
 
     await page.setViewport({
       width: 1400,
@@ -100,7 +100,8 @@ export async function generatePdf({
     const htmlWithEmbeddedWatermark = htmlWithEmbeddedLogo.replaceAll('__WATERMARK__', watermarkDataUrl);
 
     await page.setContent(htmlWithEmbeddedWatermark, {
-      waitUntil: 'networkidle0'
+      waitUntil: 'networkidle0',
+      timeout: 30_000
     });
 const headerTemplate = `
   <div style="
@@ -171,27 +172,13 @@ const headerTemplate = `
         />
       </svg>
 
-      <!-- TEXT -->
-      <div style="
-        position: absolute;
-        top: 10.05mm;
-        left: 16mm;
-        transform: translateY(-50%);
-        font-size: 7.2px;
-        font-weight: 700;
-        color: #ffffff;
-        white-space: nowrap;
-      ">
-        ${esc(confidentialLabel)}&nbsp;&nbsp;
-      </div>
-
-     <!-- LOGO -->
+      <!-- LOGO -->
 <div style="
   position: absolute;
-  top: 3.2mm;
-  right: 7mm;
-  width: 30mm;
-  height: 14.5mm;
+  top: 5mm;
+  right: 11mm;
+  width: 22mm;
+  height: 10mm;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -201,8 +188,8 @@ const headerTemplate = `
     src="${logoDataUrl}"
     alt="Company Logo"
     style="
-      width: 85%;
-      height: 85%;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
       object-position: center;
       display: block;
@@ -232,7 +219,6 @@ const headerTemplate = `
         <span style="font-weight: 600; letter-spacing: 0.2px;">
           Mle Systems Pvt. Ltd.
         </span>
-        <span>MLE Resume</span>
       </div>
     `;
 

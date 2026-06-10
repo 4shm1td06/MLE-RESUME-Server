@@ -1,21 +1,104 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { extractTextFromResume } from '../services/extractTextFromResume.js';
 import { parseResumeText } from '../services/parseResumeText.js';
 import { generatePdf } from '../services/generatePdf.js';
-import { generateDocx } from '../services/docxBuilder.js';
+import { buildFromTemplate } from '../services/docxTemplateBuilder.js';
 import { getAtsScore } from '../services/atsScore.js';
 import { getJdMatch } from '../services/jdMatch.js';
 import { grammarFix } from '../services/grammarFix.js';
 import { buildResumeHtml } from '../templates/mleTemplate.js';
 import { normalizeResume } from '../utils/schema.js';
+import { normalizeToAffindaSchema } from '../utils/affindaSchema.js';
+import { computeConfidence } from '../utils/confidence.js';
+import {
+  createDocumentId,
+  markProcessing,
+  markReady,
+  markFailed,
+  getDocument,
+  listDocuments,
+  deleteDocument,
+} from '../services/documentStore.js';
+
+function affindaToMleSchema(affinda) {
+  // Fix swapped company/role when AI puts title in org and org in title
+  const fixWorkEntry = (w) => {
+    let company = w?.organization || '';
+    let role = w?.jobTitle || '';
+    if ((!role || role === '—' || role === '-') && company) {
+      role = company;
+      company = '';
+    }
+    return { company, role, duration: (w?.dateRange || '') };
+  };
+
+  const workHistory = (affinda.workExperience || []).map(fixWorkEntry);
+  const firstWork = workHistory[0] || {};
+
+  const techFromProjects = (affinda.projects || []).map(p => ({
+    role: p.title || '',
+    duration: p.dateRange || '',
+    contributions: p.highlights || [],
+    technologies: p.technologies || [],
+    client: p.organization || '',
+  }));
+
+  const techFromWork = (affinda.workExperience || []).map(w => ({
+    role: w.jobTitle || '',
+    duration: w.dateRange || '',
+    contributions: w.contributions || [],
+    technologies: [],
+    client: w.organization || '',
+  }));
+
+  const technicalExperience = [...techFromProjects, ...techFromWork];
+
+  return {
+    candidateName: affinda.candidateName?.fullName || '',
+    candidateInitials: (affinda.candidateName?.fullName || '').split(/\s+/).map(p => p[0] || '').join('').toUpperCase(),
+    title: firstWork.role || '',
+    phone: affinda.phoneNumber?.[0] || '',
+    email: affinda.email?.[0] || '',
+    linkedin: (affinda.websites || []).find(w => w.type === 'linkedin')?.url || '',
+    location: affinda.location?.formatted || '',
+    totalExperience: affinda.totalYearsExperience || '',
+    currentCompany: firstWork.company || '',
+    currentDesignation: firstWork.role || '',
+    noticePeriod: '',
+    currentCtc: '',
+    expectedCtc: '',
+    highestQualification: affinda.education?.[0]?.accreditation || '',
+    professionalSummary: affinda.summary ? [affinda.summary] : [],
+    expertise: [],
+    domainExperience: [],
+    toolsAndPlatforms: [],
+    educationalQualification: (affinda.education || []).map(e =>
+      [e.accreditation, e.organization].filter(Boolean).join(' - ')
+    ),
+    skillGroups: [{ title: 'Skills', items: affinda.skills || [] }],
+    workHistory,
+    technicalExperience,
+    certifications: affinda.certifications || [],
+    keyAchievements: affinda.achievements || [],
+    languagesKnown: (affinda.languages || []).map(l => l.name).filter(Boolean),
+    additionalSections: [],
+    confidentialLabel: 'Confidential',
+    maskPersonalDetails: false,
+  };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const serverRoot = path.resolve(__dirname, '../..');
 const generatedDir = path.join(serverRoot, 'generated');
 fs.mkdirSync(generatedDir, { recursive: true });
+
+// -------------------------------------------------------
+// Legacy formatter endpoints (backward compatible)
+// -------------------------------------------------------
 
 export async function parseResumeController(req, res) {
   try {
@@ -25,20 +108,17 @@ export async function parseResumeController(req, res) {
 
     const extractedText = await extractTextFromResume({
       filePath: req.file.path,
-      mimeType: req.file.mimetype
+      mimeType: req.file.mimetype,
     });
 
-    const parsed = await parseResumeText(extractedText);
-    const normalized = normalizeResume(parsed.data);
+    const { data: affindaData } = await parseResumeText(extractedText);
+    const legacyData = affindaToMleSchema(affindaData);
 
     return res.json({
       success: true,
-      parsedData: normalized,
+      parsedData: legacyData,
       extractedText,
-      meta: parsed.meta,
-      message: parsed.meta.apiUsed && !parsed.meta.fallbackUsed
-        ? 'Resume parsed successfully with OpenRouter enhancement.'
-        : 'Resume parsed successfully using the built-in parser.'
+      message: 'Resume parsed successfully.',
     });
   } catch (error) {
     console.error(error);
@@ -54,14 +134,13 @@ export async function parseResumeController(req, res) {
 
 export async function generatePdfController(req, res) {
   try {
-    const data = normalizeResume(req.body || {});
+    const data = normalizeResume(req.body || {}, { verbatim: true });
     const rawText = req.body?.rawText || '';
-
-    const fileName = `mle-resume-${Date.now()}.pdf`;
+    const firstName = (data.candidateName || '').split(/\s+/)[0] || 'resume';
+    const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
+    const fileName = `${firstName}_${dateStr}.pdf`;
     const outputPath = path.join(generatedDir, fileName);
-
     const html = buildResumeHtml(data);
-
     const [atsScore] = await Promise.all([
       getAtsScore(data, rawText).catch(() => null),
       generatePdf({ html, outputPath }),
@@ -80,10 +159,13 @@ export async function generatePdfController(req, res) {
 
 export async function generateDocxController(req, res) {
   try {
-    const data = normalizeResume(req.body || {});
-    const fileName = `mle-resume-${Date.now()}.docx`;
+    const data = normalizeResume(req.body || {}, { verbatim: true });
+    const firstName = (data.candidateName || '').split(/\s+/)[0] || 'resume';
+    const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
+    const fileName = `${firstName}_${dateStr}.docx`;
     const outputPath = path.join(generatedDir, fileName);
-    await generateDocx({ data, outputPath });
+    const buffer = await buildFromTemplate(data);
+    await fs.promises.writeFile(outputPath, buffer);
     return res.json({ success: true, docxUrl: `/generated/${fileName}` });
   } catch (error) {
     console.error(error);
@@ -95,14 +177,7 @@ export async function grammarFixController(req, res) {
   try {
     const data = normalizeResume(req.body?.resumeData || {});
     const result = await grammarFix(data);
-    return res.json({
-      success: true,
-      fixedData: result.data,
-      provider: result.provider,
-      message: result.provider === 'openrouter'
-        ? 'Grammar fixed with AI enhancement.'
-        : 'Grammar fixed with built-in rules.'
-    });
+    return res.json({ success: true, fixedData: result.data });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message || 'Failed to fix grammar.' });
@@ -135,4 +210,142 @@ export async function jdMatchController(req, res) {
     console.error(error);
     return res.status(500).json({ error: error.message || 'Failed to compute JD match.' });
   }
+}
+
+// -------------------------------------------------------
+// V3 Affinda-compatible API endpoints
+// -------------------------------------------------------
+
+export async function createDocumentController(req, res) {
+  const identifier = createDocumentId();
+  const fileName = req.file?.originalname || req.body?.fileName || null;
+  const mimeType = req.file?.mimetype || req.body?.mimeType || null;
+
+  try {
+    markProcessing(identifier, fileName, mimeType);
+
+    if (!req.file && !req.body?.url && !req.body?.data) {
+      markFailed(identifier, 'No file, URL, or data provided.');
+      return res.status(400).json({
+        type: 'validation_error',
+        errors: [{ attr: 'file', code: 'required', detail: 'A file, URL, or data is required.' }],
+      });
+    }
+
+    let extractedText = '';
+
+    if (req.file) {
+      extractedText = await extractTextFromResume({
+        filePath: req.file.path,
+        mimeType: req.file.mimetype,
+      });
+    } else if (req.body?.url) {
+      const resp = await fetch(req.body.url);
+      if (!resp.ok) throw new Error(`Failed to fetch URL: ${resp.status}`);
+      const buffer = Buffer.from(await resp.arrayBuffer());
+      const tmpPath = path.join(serverRoot, 'uploads', `url-${identifier}`);
+      fs.writeFileSync(tmpPath, buffer);
+      extractedText = await extractTextFromResume({
+        filePath: tmpPath,
+        mimeType: resp.headers.get('content-type') || 'application/pdf',
+      });
+      fs.unlink(tmpPath, () => {});
+    } else if (req.body?.data) {
+      extractedText = req.body.data;
+    }
+
+    const { data: parsed, source } = await parseResumeText(extractedText);
+    const confidence = computeConfidence(parsed, extractedText, source);
+
+    markReady(identifier, parsed, confidence, extractedText, {
+      wordCount: extractedText.split(/\s+/).length,
+      charCount: extractedText.length,
+      ocrConfidence: parsed._ocrConfidence ?? null,
+    });
+
+    const compact = req.query?.compact === 'true';
+
+    return res.status(201).json({
+      data: parsed,
+      confidence,
+      meta: {
+        identifier,
+        fileName,
+        mimeType,
+        ready: true,
+        readyDt: new Date().toISOString(),
+        failed: false,
+        error: null,
+        createdDt: getDocument(identifier)?.createdDt,
+        ...(compact ? {} : { rawText: extractedText }),
+      },
+    });
+  } catch (error) {
+    console.error('Create document failed:', error);
+    markFailed(identifier, error.message);
+    return res.status(500).json({
+      type: 'processing_error',
+      errors: [{ attr: null, code: 'processing_failed', detail: error.message }],
+    });
+  } finally {
+    if (req.file?.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Failed to clean up uploaded file:', err.message);
+      });
+    }
+  }
+}
+
+export async function getDocumentController(req, res) {
+  const { identifier } = req.params;
+  const doc = getDocument(identifier);
+
+  if (!doc) {
+    return res.status(404).json({
+      type: 'not_found',
+      errors: [{ attr: null, code: 'document_not_found', detail: `Document ${identifier} not found.` }],
+    });
+  }
+
+  const compact = req.query?.compact === 'true';
+
+  return res.json({
+    data: doc.data,
+    confidence: doc.confidence,
+    meta: {
+      identifier: doc.identifier,
+      fileName: doc.fileName,
+      ready: doc.ready,
+      readyDt: doc.readyDt,
+      failed: doc.failed,
+      error: doc.error,
+      createdDt: doc.createdDt,
+      status: doc.status,
+      ...(compact ? {} : { rawText: doc.rawText }),
+    },
+  });
+}
+
+export async function listDocumentsController(req, res) {
+  const offset = parseInt(req.query?.offset, 10) || 0;
+  const limit = Math.min(parseInt(req.query?.limit, 10) || 20, 100);
+
+  const result = listDocuments({ offset, limit });
+
+  return res.json(result);
+}
+
+export async function deleteDocumentController(req, res) {
+  const { identifier } = req.params;
+  const doc = getDocument(identifier);
+
+  if (!doc) {
+    return res.status(404).json({
+      type: 'not_found',
+      errors: [{ attr: null, code: 'document_not_found', detail: `Document ${identifier} not found.` }],
+    });
+  }
+
+  deleteDocument(identifier);
+  return res.json({ message: `Document ${identifier} deleted.` });
 }

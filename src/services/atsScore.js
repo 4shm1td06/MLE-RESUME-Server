@@ -1,5 +1,3 @@
-import 'dotenv/config';
-
 const apiKey = process.env.OPENROUTER_API_KEY?.trim();
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -177,23 +175,27 @@ Raw text length: ${rawText.length} chars
 }
 
 async function callAiAts(prompt) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:5050',
-      'X-Title': process.env.OPENROUTER_APP_NAME || 'MLE Resume Formatter'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'openrouter/auto',
+      model: process.env.OPENROUTER_MODEL || 'openrouter/auto',
       messages: [
         { role: 'system', content: 'You are an ATS scoring expert. Return only valid JSON. No markdown. No explanations.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.2
+      temperature: 0.2,
+      max_tokens: 800
     })
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
@@ -212,32 +214,22 @@ export async function getAtsScore(data = {}, rawText = '') {
   const heuristic = heuristicAtsScore(data, rawText);
 
   if (!apiKey) {
-    return {
-      ...heuristic,
-      provider: 'heuristic',
-      note: 'AI analysis unavailable — using rule-based scoring'
-    };
-  }
+      return heuristic;
+    }
 
-  try {
-    const prompt = buildAiPrompt(data, rawText);
-    const aiResult = await callAiAts(prompt);
+    try {
+      const prompt = buildAiPrompt(data, rawText);
+      const aiResult = await callAiAts(prompt);
 
-    return {
-      overall: aiResult.overall ?? heuristic.overall,
-      categories: aiResult.categories ?? heuristic.categories,
-      pros: aiResult.pros ?? heuristic.pros,
-      cons: aiResult.cons ?? heuristic.cons,
-      meta: { ...heuristic.meta, ...aiResult.meta },
-      provider: 'openrouter',
-      note: 'AI-powered ATS analysis'
-    };
-  } catch (error) {
-    console.error('AI ATS analysis failed, using heuristic:', error.message);
-    return {
-      ...heuristic,
-      provider: 'heuristic',
-      note: 'AI analysis unavailable — using rule-based scoring'
-    };
-  }
+      return {
+        overall: aiResult.overall ?? heuristic.overall,
+        categories: aiResult.categories ?? heuristic.categories,
+        pros: aiResult.pros ?? heuristic.pros,
+        cons: aiResult.cons ?? heuristic.cons,
+        meta: { ...heuristic.meta, ...aiResult.meta }
+      };
+    } catch (error) {
+      console.error('AI ATS analysis failed, using heuristic:', error.message);
+      return heuristic;
+    }
 }

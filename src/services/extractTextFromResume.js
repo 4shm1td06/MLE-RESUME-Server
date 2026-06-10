@@ -12,47 +12,34 @@ const execFileAsync = promisify(execFile);
 function cleanText(input = '') {
   return String(input)
     .replace(/\u0000/g, ' ')
-    .replace(/[•●▪◦]/g, '•')
+    .replace(/[•●▪◦❖]/g, '•')
     .replace(/\r/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-function shouldIgnorePdfWarning(args = []) {
-  const msg = args.map(String).join(' ');
-  return (
-    msg.includes('Warning: TT: undefined function:') ||
-    msg.includes('Warning: TT: invalid function id:')
-  );
+const PDF_WARN_FILTER = /Warning: TT: (undefined function|invalid function id):/;
+
+function setupPdfLogFilter() {
+  const restore = [];
+  for (const level of ['warn', 'log', 'error']) {
+    const original = console[level];
+    console[level] = (...args) => {
+      if (args.some(a => PDF_WARN_FILTER.test(String(a)))) return;
+      original(...args);
+    };
+    restore.push(() => { console[level] = original; });
+  }
+  return () => restore.forEach(fn => fn());
 }
 
 async function parsePdfQuietly(buffer) {
-  const originalWarn = console.warn;
-  const originalLog = console.log;
-  const originalError = console.error;
-
+  const restore = setupPdfLogFilter();
   try {
-    console.warn = (...args) => {
-      if (shouldIgnorePdfWarning(args)) return;
-      originalWarn(...args);
-    };
-
-    console.log = (...args) => {
-      if (shouldIgnorePdfWarning(args)) return;
-      originalLog(...args);
-    };
-
-    console.error = (...args) => {
-      if (shouldIgnorePdfWarning(args)) return;
-      originalError(...args);
-    };
-
     const result = await pdfParse(buffer);
     return cleanText(result.text || '');
   } finally {
-    console.warn = originalWarn;
-    console.log = originalLog;
-    console.error = originalError;
+    restore();
   }
 }
 

@@ -1,5 +1,3 @@
-import 'dotenv/config';
-
 const apiKey = process.env.OPENROUTER_API_KEY?.trim();
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -173,23 +171,27 @@ ${rawText}
 }
 
 async function callAiJdMatch(prompt) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:5050',
-      'X-Title': process.env.OPENROUTER_APP_NAME || 'MLE Resume Formatter'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'openrouter/auto',
+      model: process.env.OPENROUTER_MODEL || 'openrouter/auto',
       messages: [
         { role: 'system', content: 'You are a hiring and ATS optimization expert. Return only valid JSON. No markdown. No explanations.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.2
+      temperature: 0.2,
+      max_tokens: 800
     })
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
@@ -208,35 +210,25 @@ export async function getJdMatch(data = {}, rawText = '', jobDescription = '') {
   const heuristic = heuristicJdMatch(data, rawText, jobDescription);
 
   if (!apiKey) {
-    return {
-      ...heuristic,
-      provider: 'heuristic',
-      note: 'AI analysis unavailable — using keyword-based matching'
-    };
-  }
+      return heuristic;
+    }
 
-  try {
-    const prompt = data?.candidateName
-      ? buildAiPrompt(data, rawText, jobDescription)
-      : buildFallbackPrompt(jobDescription, rawText);
-    const aiResult = await callAiJdMatch(prompt);
+    try {
+      const prompt = data?.candidateName
+        ? buildAiPrompt(data, rawText, jobDescription)
+        : buildFallbackPrompt(jobDescription, rawText);
+      const aiResult = await callAiJdMatch(prompt);
 
-    return {
-      overall: aiResult.overall ?? heuristic.overall,
-      categories: aiResult.categories ?? heuristic.categories,
-      matchedSkills: aiResult.matchedSkills ?? heuristic.matchedSkills,
-      missingSkills: aiResult.missingSkills ?? heuristic.missingSkills,
-      recommendations: aiResult.recommendations ?? heuristic.recommendations,
-      meta: aiResult.meta ?? heuristic.meta,
-      provider: 'openrouter',
-      note: 'AI-powered JD match analysis'
-    };
-  } catch (error) {
-    console.error('AI JD Match analysis failed, using heuristic:', error.message);
-    return {
-      ...heuristic,
-      provider: 'heuristic',
-      note: 'AI analysis unavailable — using keyword-based matching'
-    };
-  }
+      return {
+        overall: aiResult.overall ?? heuristic.overall,
+        categories: aiResult.categories ?? heuristic.categories,
+        matchedSkills: aiResult.matchedSkills ?? heuristic.matchedSkills,
+        missingSkills: aiResult.missingSkills ?? heuristic.missingSkills,
+        recommendations: aiResult.recommendations ?? heuristic.recommendations,
+        meta: aiResult.meta ?? heuristic.meta
+      };
+    } catch (error) {
+      console.error('AI JD Match analysis failed, using heuristic:', error.message);
+      return heuristic;
+    }
 }

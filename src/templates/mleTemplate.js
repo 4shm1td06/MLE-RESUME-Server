@@ -17,7 +17,7 @@ function renderSkillTable(groups = []) {
   return validGroups.map(group => `
     <tr>
       <td class="skill-title-cell">${group.title || ''}</td>
-      <td class="skill-items-cell">${(group.items || []).join(', ')}</td>
+      <td class="skill-items-cell">${(group.items || []).map(i => esc(i)).join(', ')}</td>
     </tr>
   `).join('');
 }
@@ -103,13 +103,10 @@ function renderWorkHistoryRows(rows = [], masked = true, label = 'Confidential')
     .join('');
 }
 
-function renderExperienceBlocks(blocks = [], masked = true) {
-  // INTENTIONAL: client name is always shown even when masked=true —
-  // the candidate identifies the client, not themselves.
+function renderExperienceBlocks(blocks = []) {
   const safe = (Array.isArray(blocks) ? blocks : [])
     .map((block) => ({
       role: safeText(block?.role),
-      client: safeText(block?.client),
       duration: safeText(block?.duration),
       contributions: safeList(block?.contributions)
     }))
@@ -120,22 +117,7 @@ function renderExperienceBlocks(blocks = [], masked = true) {
   return safe
     .map(
       (block) => {
-        const parts = [];
-        if (block.client && block.role) {
-          parts.push(`${esc(block.client)} - ${esc(block.role)}`);
-        } else if (block.client) {
-          parts.push(esc(block.client));
-        } else if (block.role) {
-          parts.push(esc(block.role));
-        }
-        if (block.duration) {
-          if (parts.length) {
-            parts[parts.length - 1] += ` (${esc(block.duration)})`;
-          } else {
-            parts.push(esc(block.duration));
-          }
-        }
-        const heading = parts.join(' ');
+        const heading = block.role ? `${esc(block.role)}${block.duration ? ` (${esc(block.duration)})` : ''}` : esc(block.duration);
 
         return `
         <div class="role-block">
@@ -232,7 +214,9 @@ export function buildResumeHtml(data = {}) {
   const professionalSummarySection = hasListData(data.professionalSummary)
     ? renderSection(
         'Professional Summary',
-        renderBulletList(data.professionalSummary)
+        data.professionalSummary.length > 1
+          ? renderBulletList(data.professionalSummary)
+          : `<p class="summary-text">${esc(data.professionalSummary[0])}</p>`
       )
     : '';
 
@@ -286,7 +270,7 @@ export function buildResumeHtml(data = {}) {
   const experienceSection = hasExperienceData(technicalOrProjectExperience)
     ? renderSection(
         experienceSectionTitle,
-        renderExperienceBlocks(technicalOrProjectExperience, masked)
+        renderExperienceBlocks(technicalOrProjectExperience)
       )
     : '';
   const certificationsSection = hasListData(data.certifications)
@@ -345,7 +329,7 @@ export function buildResumeHtml(data = {}) {
     position: relative;
     z-index: 2;
     margin: 0;
-    padding: 0mm 14mm 0 14mm;
+    padding: 0mm 12mm 0 12mm;
   }
   
 
@@ -384,9 +368,9 @@ export function buildResumeHtml(data = {}) {
   }
 
   .contact-line {
-    margin: 4px 0 8px 0;
+    margin: 3px 0 4px 0;
     font-size: 9.5px;
-    line-height: 1.4;
+    line-height: 1.3;
     color: #4a5a6a;
   }
 
@@ -396,106 +380,100 @@ export function buildResumeHtml(data = {}) {
   }
 
   .section {
-    margin-top: 10px;
+    margin-top: 5px;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
   .section:first-child {
-    margin-top: 8px;
+    margin-top: 3px;
   }
 
   .section-title {
-    margin: 0 0 5px 0;
+    margin: 0 0 3px 0;
     color: #001f5f;
-    font-size: 14px;
-    line-height: 1.2;
+    font-size: 13px;
+    line-height: 1.15;
     font-weight: 700;
   }
 
-  p,
-  li,
-  td,
-  th,
-  .skill-row,
-  .role-title,
-  .role-duration {
+  .summary-text {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+
+  p {
     font-size: 11px;
+    line-height: 1.4;
+  }
+
+  li {
+    font-size: 10.5px;
+    line-height: 1.35;
+    margin: 0 0 2px 0;
+  }
+
+  td, th {
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+
+  .role-title {
+    font-size: 11.5px;
+    line-height: 1.25;
+  }
+
+  .role-duration {
+    font-size: 10px;
     line-height: 1.35;
   }
 
   ul {
     margin: 0;
-    padding-left: 18px;
-  }
-
-  li {
-    margin: 0 0 3px 0;
+    padding-left: 17px;
   }
 
   .compact-list li {
-    margin-bottom: 2px;
-  }
-
-  .skills-wrap {
-    margin-top: 1px;
-  }
-
-  .skill-row {
-    margin-bottom: 3px;
-  }
-
-
-  .skill-sep {
-    font-weight: 700;
-    margin: 0 4px 0 2px;
+    margin-bottom: 1.5px;
   }
 
   table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    margin-top: 4px;
+    margin-top: 3px;
+    margin-bottom: 0;
   }
 
   thead {
     display: table-header-group;
   }
 
- .skills-table {
+.skills-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 4mm;
+  margin-top: 2px;
+  margin-bottom: 0;
   font-size: 10px;
+  table-layout: fixed;
 }
 
 .skills-table tr:nth-child(even) {
   background: #f7f9fb;
 }
 
-.skill-title {
+.skill-title-cell {
   width: 28%;
   font-weight: 700;
-  padding: 2mm;
-  background: #eef4f8;
-}
-
-.skills-table {
-  table-layout: fixed;
-  width: 100%;
-}
-
-.skill-title-cell {
-  width: 30%;
-  font-weight: 700;
   text-align: left;
-  padding: 6px;
+  padding: 4px 6px;
 }
 
 .skill-items-cell {
-  width: 70%;
+  width: 72%;
   text-align: left;
-  padding: 6px;
+  padding: 4px 6px;
   word-break: break-word;
 }
 
@@ -508,14 +486,14 @@ export function buildResumeHtml(data = {}) {
     background: #1f587f;
     color: #ffffff;
     border: 1px solid #8ea9bf;
-    padding: 6px 7px;
+    padding: 5px 6px;
     text-align: center;
     font-weight: 700;
   }
 
   tbody td {
     border: 1px solid #b8cadb;
-    padding: 6px 7px;
+    padding: 5px 6px;
     text-align: center;
     vertical-align: middle;
   }
@@ -525,7 +503,7 @@ export function buildResumeHtml(data = {}) {
   }
 
   .role-block {
-    margin-top: 8px;
+    margin-top: 3px;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -545,13 +523,11 @@ export function buildResumeHtml(data = {}) {
     margin-bottom: 4px;
   }
 
- 
-}
+
 </style>
 </head>
 <body>
   <div class="watermark" aria-hidden="true"></div>
-  <div class="hero-glow" aria-hidden="true"></div>
 
   <div class="page">
     <div class="content">
