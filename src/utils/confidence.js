@@ -54,9 +54,9 @@ export function computeConfidence(data = {}, rawText = '', source = 'heuristic')
 
   conf.skills = (() => {
     if (!hasValue(data.skills)) return 0;
-    const count = data.skills.length;
-    if (count >= 5) return textConfidence('skills');
-    if (count >= 1) return aiExtracted ? 0.75 : 0.60;
+    const flatCount = data.skills.reduce((sum, g) => sum + (g.items?.length || 0), 0);
+    if (flatCount >= 5) return textConfidence('skills');
+    if (flatCount >= 1) return aiExtracted ? 0.75 : 0.60;
     return 0;
   })();
 

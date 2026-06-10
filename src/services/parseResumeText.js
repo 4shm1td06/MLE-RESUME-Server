@@ -19,7 +19,7 @@ function buildAiPrompt(rawText) {
 8. Summary: copy the entire professional summary section.
 9. Key achievements: copy each key achievement / accomplishment bullet point into achievements[].
 
-Schema: candidateName{fullName}, email[], phoneNumber[], location{formatted}, summary, skills[], workExperience[{jobTitle,organization,dateRange,highlights[]}], education[{accreditation,organization,dateRange}], certifications[], projects[{title,technologies[],highlights[]}], achievements[]
+Schema: candidateName{fullName}, email[], phoneNumber[], location{formatted}, summary, skills[{category,items[]}], workExperience[{jobTitle,organization,dateRange,highlights[]}], education[{accreditation,organization,dateRange}], certifications[], projects[{title,technologies[],highlights[]}], achievements[]
 
 Text:
 ${rawText}`.trim();

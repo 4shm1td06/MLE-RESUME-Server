@@ -78,7 +78,7 @@ function affindaToMleSchema(affinda) {
     educationalQualification: (affinda.education || []).map(e =>
       [e.accreditation, e.organization].filter(Boolean).join(' - ')
     ),
-    skillGroups: [{ title: 'Skills', items: affinda.skills || [] }],
+    skillGroups: (affinda.skills || []).map(s => ({ title: s.category || 'Skills', items: s.items || [] })),
     workHistory,
     technicalExperience,
     certifications: affinda.certifications || [],

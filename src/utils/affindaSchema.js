@@ -122,11 +122,18 @@ function cleanWorkExperience(entries) {
 
 function cleanSkills(input) {
   if (Array.isArray(input)) {
-    return uniqueList(input);
+    if (input.length > 0 && typeof input[0] === 'object' && input[0] !== null && !Array.isArray(input[0])) {
+      return input.map(g => ({
+        category: cleanText(g.category || g.name || g.title || ''),
+        items: uniqueList(g.items || g.skills || [])
+      })).filter(g => g.items.length);
+    }
+    const items = uniqueList(input);
+    return items.length ? [{ category: 'Skills', items }] : [];
   }
   if (typeof input === 'object' && input !== null) {
-    const items = input.items || input.skills || input.list || [];
-    return uniqueList(items);
+    const items = uniqueList(input.items || input.skills || input.list || []);
+    return items.length ? [{ category: cleanText(input.category || input.name || input.title || 'Skills'), items }] : [];
   }
   return [];
 }
