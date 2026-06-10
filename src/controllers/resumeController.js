@@ -8,7 +8,6 @@ import { generatePdf } from '../services/generatePdf.js';
 import { buildFromTemplate } from '../services/docxTemplateBuilder.js';
 import { getAtsScore } from '../services/atsScore.js';
 import { getJdMatch } from '../services/jdMatch.js';
-import { grammarFix } from '../services/grammarFix.js';
 import { buildResumeHtml } from '../templates/mleTemplate.js';
 import { normalizeResume } from '../utils/schema.js';
 import { normalizeToAffindaSchema } from '../utils/affindaSchema.js';
@@ -181,17 +180,6 @@ export async function generateDocxController(req, res) {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message || 'Failed to generate DOCX.' });
-  }
-}
-
-export async function grammarFixController(req, res) {
-  try {
-    const data = normalizeResume(req.body?.resumeData || {});
-    const result = await grammarFix(data);
-    return res.json({ success: true, fixedData: result.data });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error.message || 'Failed to fix grammar.' });
   }
 }
 

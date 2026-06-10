@@ -7,7 +7,6 @@ import {
   atsScoreController,
   generatePdfController,
   generateDocxController,
-  grammarFixController,
   jdMatchController,
   parseResumeController,
   createDocumentController,
@@ -47,7 +46,6 @@ router.post('/parse', upload.single('resume'), parseResumeController);
 router.post('/generate-pdf', generatePdfController);
 router.post('/generate-docx', generateDocxController);
 router.post('/ats-score', atsScoreController);
-router.post('/grammar-fix', grammarFixController);
 router.post('/jd-match', jdMatchController);
 
 // -------------------------------------------------------
