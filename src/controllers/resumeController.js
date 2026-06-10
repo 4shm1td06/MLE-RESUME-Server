@@ -96,6 +96,15 @@ const serverRoot = path.resolve(__dirname, '../..');
 const generatedDir = path.join(serverRoot, 'generated');
 fs.mkdirSync(generatedDir, { recursive: true });
 
+function buildBaseName(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  const first = parts[0] || 'resume';
+  const last = parts.length > 1 ? parts[parts.length - 1] : '';
+  const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
+  const base = last ? `${first}_${last}`.toLowerCase() : first.toLowerCase();
+  return `${base}_${dateStr}`;
+}
+
 // -------------------------------------------------------
 // Legacy formatter endpoints (backward compatible)
 // -------------------------------------------------------
@@ -136,9 +145,7 @@ export async function generatePdfController(req, res) {
   try {
     const data = normalizeResume(req.body || {}, { verbatim: true });
     const rawText = req.body?.rawText || '';
-    const firstName = (data.candidateName || '').split(/\s+/)[0] || 'resume';
-    const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
-    const fileName = `${firstName}_${dateStr}.pdf`;
+    const fileName = `${buildBaseName(data.candidateName)}.pdf`;
     const html = buildResumeHtml(data);
     const [pdfBuffer, atsScore] = await Promise.all([
       generatePdf({ html }),
@@ -162,9 +169,7 @@ export async function generatePdfController(req, res) {
 export async function generateDocxController(req, res) {
   try {
     const data = normalizeResume(req.body || {}, { verbatim: true });
-    const firstName = (data.candidateName || '').split(/\s+/)[0] || 'resume';
-    const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
-    const fileName = `${firstName}_${dateStr}.docx`;
+    const fileName = `${buildBaseName(data.candidateName)}.docx`;
     const buffer = await buildFromTemplate(data);
     res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.set('Content-Disposition', `attachment; filename="${fileName}"`);
