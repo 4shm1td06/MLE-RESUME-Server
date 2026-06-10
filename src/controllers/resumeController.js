@@ -154,6 +154,7 @@ export async function generatePdfController(req, res) {
 
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.set('X-Debug-Name', data.candidateName || '(empty)');
     if (atsScore) {
       try {
         res.set('X-ATS-Score', encodeURIComponent(JSON.stringify(atsScore)));
