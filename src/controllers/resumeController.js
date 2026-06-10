@@ -154,8 +154,8 @@ export async function generatePdfController(req, res) {
     }
     return res.send(pdfBuffer);
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error.message || 'Failed to generate PDF.' });
+    console.error('PDF generation error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to generate PDF.', details: error.stack || String(error) });
   }
 }
 
