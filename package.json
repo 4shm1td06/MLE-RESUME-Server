@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "prepare-template": "node scripts/prepare-template.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

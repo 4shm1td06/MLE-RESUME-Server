@@ -139,18 +139,20 @@ export async function generatePdfController(req, res) {
     const firstName = (data.candidateName || '').split(/\s+/)[0] || 'resume';
     const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
     const fileName = `${firstName}_${dateStr}.pdf`;
-    const outputPath = path.join(generatedDir, fileName);
     const html = buildResumeHtml(data);
-    const [atsScore] = await Promise.all([
+    const [pdfBuffer, atsScore] = await Promise.all([
+      generatePdf({ html }),
       getAtsScore(data, rawText).catch(() => null),
-      generatePdf({ html, outputPath }),
     ]);
 
-    return res.json({
-      success: true,
-      pdfUrl: `/generated/${fileName}`,
-      atsScore,
-    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+    if (atsScore) {
+      try {
+        res.set('X-ATS-Score', encodeURIComponent(JSON.stringify(atsScore)));
+      } catch { /* header value not encodable */ }
+    }
+    return res.send(pdfBuffer);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message || 'Failed to generate PDF.' });
@@ -163,10 +165,10 @@ export async function generateDocxController(req, res) {
     const firstName = (data.candidateName || '').split(/\s+/)[0] || 'resume';
     const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
     const fileName = `${firstName}_${dateStr}.docx`;
-    const outputPath = path.join(generatedDir, fileName);
     const buffer = await buildFromTemplate(data);
-    await fs.promises.writeFile(outputPath, buffer);
-    return res.json({ success: true, docxUrl: `/generated/${fileName}` });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+    return res.send(buffer);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message || 'Failed to generate DOCX.' });

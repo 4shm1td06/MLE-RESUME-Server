@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const assetsDir = path.resolve(__dirname, '../../assets');
 
 function esc(value = '') {
   return String(value)
@@ -87,9 +92,9 @@ export async function generatePdf({
      * You can also use logo.jpg, logo.jpeg, logo.svg, logo.webp
      * by changing the filename below.
      */
-    const logoFilePath = path.resolve('assets/mle-logo-2023.png');
+    const logoFilePath = path.join(assetsDir, 'mle-logo-2023.png');
     const logoDataUrl = getBase64ImageDataUrl(logoFilePath);
-    const watermarkFilePath = path.resolve('assets/mle-watermark.png');
+    const watermarkFilePath = path.join(assetsDir, 'mle-watermark.png');
     const watermarkDataUrl = getBase64ImageDataUrl(watermarkFilePath);
 
     /*
@@ -222,8 +227,7 @@ const headerTemplate = `
       </div>
     `;
 
-    await page.pdf({
-      path: outputPath,
+    const pdfBuffer = Buffer.from(await page.pdf({
       format: 'A4',
       printBackground: true,
       displayHeaderFooter: true,
@@ -236,7 +240,11 @@ const headerTemplate = `
         bottom: `${MARGIN_BOTTOM_MM}mm`,
         left: '0'
       }
-    });
+    }));
+    if (outputPath) {
+      await fs.promises.writeFile(outputPath, pdfBuffer);
+    }
+    return pdfBuffer;
   } finally {
     await browser.close();
   }
