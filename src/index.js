@@ -17,7 +17,7 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(morgan('short'));
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,https://mle-resume-formatter-client.vercel.app').split(',');
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({ origin: allowedOrigins, exposedHeaders: ['Content-Disposition', 'X-ATS-Score'] }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use('/generated', express.static(path.join(serverRoot, 'generated')));
