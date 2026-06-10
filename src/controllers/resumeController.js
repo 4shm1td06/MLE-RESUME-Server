@@ -98,11 +98,13 @@ fs.mkdirSync(generatedDir, { recursive: true });
 
 function buildBaseName(name) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  const first = parts[0] || 'resume';
-  const last = parts.length > 1 ? parts[parts.length - 1] : '';
-  const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '');
-  const base = last ? `${first}_${last}`.toLowerCase() : first.toLowerCase();
-  return `${base}_${dateStr}`;
+  if (!parts.length) return 'MLE_Resume';
+  const first = parts[0];
+  const lastName = parts.length > 1 ? parts[parts.length - 1] : '';
+  const firstName = first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+  if (!lastName) return `MLE_${firstName}`;
+  const lastInitial = lastName.charAt(0).toUpperCase();
+  return `MLE_${firstName}_${lastInitial}`;
 }
 
 // -------------------------------------------------------
