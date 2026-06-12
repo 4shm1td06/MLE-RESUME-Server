@@ -3,9 +3,13 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import os from 'os';
+import { createRequire } from 'module';
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse';
 import Tesseract from 'tesseract.js';
+
+const require = createRequire(import.meta.url);
+const WordExtractor = require('word-extractor');
 
 const execFileAsync = promisify(execFile);
 
@@ -104,5 +108,11 @@ export async function extractTextFromResume({ filePath, mimeType }) {
     return cleanText(result.value || '');
   }
 
-  throw new Error('Unsupported file type. Please upload a PDF or DOCX file.');
+  if (mimeType === 'application/msword') {
+    const extractor = new WordExtractor();
+    const extracted = await extractor.extract(filePath);
+    return cleanText(extracted.getBody() || '');
+  }
+
+  throw new Error('Unsupported file type. Please upload a PDF, DOC, or DOCX file.');
 }

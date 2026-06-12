@@ -30,9 +30,10 @@ const upload = multer({
     const allowed = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
     ];
     if (!allowed.includes(file.mimetype)) {
-      cb(new Error('Only PDF and DOCX files are supported.'));
+      cb(new Error('Only PDF, DOC, and DOCX files are supported.'));
       return;
     }
     cb(null, true);
@@ -61,12 +62,13 @@ const v3Upload = multer({
     const allowed = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
       'image/png',
       'image/jpeg',
       'image/tiff',
     ];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(file.mimetype) || ['.pdf', '.docx', '.png', '.jpg', '.jpeg', '.tiff'].includes(ext)) {
+    if (allowed.includes(file.mimetype) || ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.tiff'].includes(ext)) {
       cb(null, true);
       return;
     }

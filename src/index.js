@@ -1,7 +1,7 @@
-import 'dotenv/config';
-import fs from 'fs';
+import './env.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -107,7 +107,7 @@ app.use((err, _req, res, _next) => {
       errors: [{ attr: 'file', code: 'file_too_large', detail: 'File too large. Maximum size is 10MB.' }],
     });
   }
-  if (err.message?.includes('Only PDF and DOCX') || err.message?.includes('Unsupported file type')) {
+  if (err.message?.includes('Only PDF') || err.message?.includes('Unsupported file type')) {
     return res.status(400).json({
       type: 'validation_error',
       errors: [{ attr: 'file', code: 'unsupported_file_type', detail: err.message }],

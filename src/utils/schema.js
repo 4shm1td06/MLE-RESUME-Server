@@ -654,6 +654,7 @@ const DEFAULT_RESUME = {
   skillGroups: [],
   workHistory: [],
   technicalExperience: [],
+  projectExperience: [],
   certifications: [],
   keyAchievements: [],
   languagesKnown: [],
@@ -702,8 +703,9 @@ export function normalizeResume(input = {}, options = {}) {
       skillGroups: asArray(data.skillGroups || data.skills || data.technicalSkills || data.coreSkills || data.keySkills || data.techStack),
       workHistory: asArray(data.workHistory || data.employmentHistory || data.careerHistory),
       technicalExperience: asArray(
-        data.technicalExperience || data.projectExperience || data.professionalExperience || data.workExperience || data.relevantExperience,
+        data.technicalExperience || data.professionalExperience || data.workExperience || data.relevantExperience,
       ),
+      projectExperience: cleanExperienceBlocks(asArray(data.projectExperience)),
       certifications: asArray(
         data.certifications || data.Certifications || data.certificates || data.certs || data.licenses || data.licences || data.courses || data.professionalCertifications,
       ),
@@ -775,11 +777,14 @@ export function normalizeResume(input = {}, options = {}) {
 
   const resolvedExperience = mergeExperienceBlocks(
     technicalExperience,
-    projectExperience,
     professionalExperience,
     workExperience,
     relevantExperience,
     rawTextProjects
+  );
+
+  const resolvedProjectExperience = mergeExperienceBlocks(
+    projectExperience
   );
 
   const certifications = firstNonEmptyList(
@@ -896,6 +901,7 @@ export function normalizeResume(input = {}, options = {}) {
     skillGroups,
     workHistory,
     technicalExperience: resolvedExperience,
+    projectExperience: resolvedProjectExperience,
     certifications: fallbackCertifications,
     keyAchievements: fallbackAchievements
   };

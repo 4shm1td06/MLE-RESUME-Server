@@ -16,7 +16,7 @@ export function postProcessResume(data, rawText, source) {
   }
 
   // Remove workExperience entries that are actually projects (duplicated by AI)
-  const projectTitles = (data.projects || []).map(p => (p.title || '').toLowerCase().trim()).filter(Boolean);
+  const projectTitles = (data.projects || []).map(p => (p.title || '').toLowerCase().trim()).filter(Boolean).filter(t => t !== '—' && t !== '-');
   if (projectTitles.length > 0 && (data.workExperience || []).length > 0) {
     data.workExperience = data.workExperience.filter(w => {
       const title = (w.jobTitle || '').toLowerCase().trim();

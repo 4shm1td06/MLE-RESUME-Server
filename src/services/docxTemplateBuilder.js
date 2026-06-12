@@ -260,13 +260,16 @@ export async function buildFromTemplate(data) {
     bodyXml += workHistoryTableXml(data.workHistory, masked, data.confidentialLabel || 'Confidential');
   }
 
-  // Technical / Project Experience
+  // Technical Experience
   if (hasExperienceData(data.technicalExperience)) {
     bodyXml += sectionTitleText('Technical Experience', firstSection);
     firstSection = false;
     bodyXml += experienceBlocksXml(data.technicalExperience);
-  } else if (hasExperienceData(data.projectExperience)) {
-    bodyXml += sectionTitleText('Project Experience', firstSection);
+  }
+
+  // Projects
+  if (hasExperienceData(data.projectExperience)) {
+    bodyXml += sectionTitleText('Projects', firstSection);
     firstSection = false;
     bodyXml += experienceBlocksXml(data.projectExperience);
   }

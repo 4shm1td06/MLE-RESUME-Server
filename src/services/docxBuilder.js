@@ -348,9 +348,6 @@ export async function buildDocx(data) {
   if (hasExperienceData(data.technicalExperience)) {
     techOrProject = data.technicalExperience;
     expTitle = 'Technical Experience';
-  } else if (hasExperienceData(data.projectExperience)) {
-    techOrProject = data.projectExperience;
-    expTitle = 'Project Experience';
   } else {
     techOrProject = [];
     expTitle = 'Technical Experience';
@@ -416,6 +413,12 @@ export async function buildDocx(data) {
     children.push(sectionTitle(expTitle, firstSection));
     firstSection = false;
     children.push(...experienceBlocks(techOrProject));
+  }
+
+  if (hasExperienceData(data.projectExperience)) {
+    children.push(sectionTitle('Projects', firstSection));
+    firstSection = false;
+    children.push(...experienceBlocks(data.projectExperience));
   }
 
   if (hasListData(data.certifications)) {

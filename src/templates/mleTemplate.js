@@ -184,20 +184,6 @@ export function buildResumeHtml(data = {}) {
   }
   const contactLine = contactParts.length ? `<div class="contact-line">${contactParts.join('<span class="contact-sep">|</span>')}</div>` : '';
 
-  let technicalOrProjectExperience;
-  let experienceSectionTitle;
-
-  if (hasExperienceData(data.technicalExperience)) {
-    technicalOrProjectExperience = data.technicalExperience;
-    experienceSectionTitle = 'Technical Experience';
-  } else if (hasExperienceData(data.projectExperience)) {
-    technicalOrProjectExperience = data.projectExperience;
-    experienceSectionTitle = 'Project Experience';
-  } else {
-    technicalOrProjectExperience = [];
-    experienceSectionTitle = 'Technical Experience';
-  }
-
   const professionalSummarySection = hasListData(data.professionalSummary)
     ? renderSection(
         'Professional Summary',
@@ -254,12 +240,20 @@ export function buildResumeHtml(data = {}) {
       )
     : '';
 
-  const experienceSection = hasExperienceData(technicalOrProjectExperience)
+  const experienceSection = hasExperienceData(data.technicalExperience)
     ? renderSection(
-        experienceSectionTitle,
-        renderExperienceBlocks(technicalOrProjectExperience)
+        'Technical Experience',
+        renderExperienceBlocks(data.technicalExperience)
       )
     : '';
+
+  const projectsSection = hasExperienceData(data.projectExperience)
+    ? renderSection(
+        'Projects',
+        renderExperienceBlocks(data.projectExperience)
+      )
+    : '';
+
   const certificationsSection = hasListData(data.certifications)
     ? renderSection(
         'Certifications',
@@ -527,6 +521,7 @@ export function buildResumeHtml(data = {}) {
       ${skillsSection}
       ${workHistorySection}
       ${experienceSection}
+      ${projectsSection}
       ${certificationsSection}
       ${keyAchievementsSection}
       ${renderDynamicSections(data.additionalSections)}

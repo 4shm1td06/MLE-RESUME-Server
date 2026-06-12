@@ -37,23 +37,119 @@ function affindaToMleSchema(affinda) {
   const workHistory = (affinda.workExperience || []).map(fixWorkEntry);
   const firstWork = workHistory[0] || {};
 
-  const techFromProjects = (affinda.projects || []).map(p => ({
-    role: p.title || '',
-    duration: p.dateRange || '',
-    contributions: p.highlights || [],
-    technologies: p.technologies || [],
-    client: p.organization || '',
-  }));
+  // Filter out AI placeholder entries with no real content
+  function hasProjectData(p) {
+    return p && (
+      (p.title || p.name || p.projectName || '').trim().length > 1 ||
+      (Array.isArray(p.highlights) && p.highlights.some(h => h.trim().length > 0)) ||
+      (Array.isArray(p.contributions) && p.contributions.some(c => c.trim().length > 0)) ||
+      (Array.isArray(p.technologies) && p.technologies.some(t => t.trim().length > 0))
+    );
+  }
 
-  const techFromWork = (affinda.workExperience || []).map(w => ({
-    role: w.jobTitle || '',
-    duration: w.dateRange || '',
-    contributions: w.contributions || [],
-    technologies: [],
-    client: w.organization || '',
-  }));
+  const techFromProjects = (affinda.projects || [])
+    .filter(hasProjectData)
+    .map(p => ({
+      role: p.title || p.name || p.projectName || '',
+      duration: p.dateRange || '',
+      contributions: p.highlights || p.contributions || [],
+      technologies: p.technologies || [],
+      client: p.organization || '',
+    }));
 
-  const technicalExperience = [...techFromProjects, ...techFromWork];
+  const techFromWork = (affinda.workExperience || [])
+    .map(w => ({
+      role: w.jobTitle || '',
+      duration: w.dateRange || '',
+      contributions: w.contributions || [],
+      technologies: [],
+      client: w.organization || '',
+    }))
+    .filter(b => {
+      const t = (b.role || '').trim();
+      return t.length > 0 && t !== '—' && t !== '-';
+    });
+function deriveProjectTitle(contribution) {
+  let text = contribution.trim();
+  // Strip all leading verb phrases
+  for (const pattern of [/^Responsible\s+for\s+/i, /^Carrying\s+out\s+/i, /^Handling\s+(?:various\s+)?/i, /^Leading\s+(?:and\s+Managing\s+|the\s+)?/i, /^Managing\s+/i, /^Working\s+(?:on\s+)?/i, /^Gathering\s+/i, /^Worked\s+on\s+/i]) {
+    while (pattern.test(text)) text = text.replace(pattern, '');
+  }
+  // Client project name pattern
+  const clientProj = text.match(/^([A-Z][a-zA-Z]+)\s+is\s+gearing\s+up\s+towards\s+(.+?)\s+from\s/);
+  if (clientProj) return (clientProj[2].trim() + ' Migration').replace(/  /g, ' ');
+  // Extract key content words
+  const stop = new Set(['the','a','an','of','in','for','to','with','on','at','by','from','and','various','different','this','that','their','its','all','into','upon','about','after','before','between','through','during','without','within','along','like','out','new']);
+  const words = text.split(/\s+/)
+    .map(w => w.replace(/^[^a-zA-Z0-9]+/, '').replace(/[^a-zA-Z0-9]+$/, ''))
+    .filter(w => w.length > 1 && !stop.has(w.toLowerCase()));
+  let title = words.slice(0, 4).join(' ');
+  if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
+  return title || text.slice(0, 40);
+}
+
+  // Extract individual project entries from work contributions
+  const projectExperience = techFromProjects.length > 0
+    ? [...techFromProjects]
+    : techFromWork.flatMap(entry =>
+        (entry.contributions || []).map(c => {
+          const derived = deriveProjectTitle(c, entry.role);
+          return {
+            title: derived,
+            role: derived,
+            duration: entry.duration,
+            contributions: [c],
+            technologies: [],
+            client: entry.client,
+          };
+        })
+      );
+
+  const technicalExperience = techFromWork.length > 0
+    ? techFromWork
+    : [...techFromProjects];
+
+  // Deduplicate workHistory and technicalExperience by duration
+  const seenDurations = new Set();
+  const dedupedWorkHistory = workHistory.filter(w => {
+    const key = (w.duration || '').trim().toLowerCase();
+    if (!key || seenDurations.has(key)) return false;
+    seenDurations.add(key);
+    return true;
+  });
+
+  const seenTeDurations = new Set();
+  const dedupedTechnicalExperience = technicalExperience.filter(t => {
+    const key = (t.duration || '').trim().toLowerCase();
+    if (!key || seenTeDurations.has(key)) return false;
+    seenTeDurations.add(key);
+    return true;
+  });
+
+  // Extract totalExperience from summary as fallback
+  let totalExperience = affinda.totalYearsExperience || '';
+  if (!totalExperience && affinda.summary) {
+    const expMatch = affinda.summary.match(/(\d+\+?\s*(?:yrs?\.|years?))\s*(?:of\s+)?experience/i);
+    if (expMatch) totalExperience = expMatch[1];
+  }
+
+  // Extract expertise areas from skill categories and summary keywords
+  const expertise = [];
+  if (affinda.summary) {
+    const sapMatches = affinda.summary.match(/SAP\s+[A-Za-z0-9/]+/g);
+    if (sapMatches) expertise.push(...sapMatches.map(s => s.trim()).filter((v, i, a) => a.indexOf(v) === i));
+  }
+
+  // Populate toolsAndPlatforms from skill groups with tool-like categories
+  const toolsAndPlatforms = [];
+  if (affinda.skills) {
+    for (const group of affinda.skills) {
+      const cat = (group.category || '').toLowerCase();
+      if (cat === 'tools' || cat === 'platforms' || cat === 'tools & platforms') {
+        toolsAndPlatforms.push(...(group.items || []));
+      }
+    }
+  }
 
   return {
     candidateName: affinda.candidateName?.fullName || '',
@@ -63,7 +159,7 @@ function affindaToMleSchema(affinda) {
     email: affinda.email?.[0] || '',
     linkedin: (affinda.websites || []).find(w => w.type === 'linkedin')?.url || '',
     location: affinda.location?.formatted || '',
-    totalExperience: affinda.totalYearsExperience || '',
+    totalExperience,
     currentCompany: firstWork.company || '',
     currentDesignation: firstWork.role || '',
     noticePeriod: '',
@@ -71,15 +167,16 @@ function affindaToMleSchema(affinda) {
     expectedCtc: '',
     highestQualification: affinda.education?.[0]?.accreditation || '',
     professionalSummary: affinda.summary ? [affinda.summary] : [],
-    expertise: [],
+    expertise,
     domainExperience: [],
-    toolsAndPlatforms: [],
+    toolsAndPlatforms,
     educationalQualification: (affinda.education || []).map(e =>
       [e.accreditation, e.organization].filter(Boolean).join(' - ')
     ),
     skillGroups: (affinda.skills || []).map(s => ({ title: s.category || 'Skills', items: s.items || [] })),
-    workHistory,
-    technicalExperience,
+    workHistory: dedupedWorkHistory,
+    technicalExperience: dedupedTechnicalExperience,
+    projectExperience,
     certifications: affinda.certifications || [],
     keyAchievements: affinda.achievements || [],
     languagesKnown: (affinda.languages || []).map(l => l.name).filter(Boolean),
@@ -121,11 +218,12 @@ export async function parseResumeController(req, res) {
       mimeType: req.file.mimetype,
     });
 
-    const { data: affindaData } = await parseResumeText(extractedText);
+    const { data: affindaData, source } = await parseResumeText(extractedText);
     const legacyData = affindaToMleSchema(affindaData);
 
     return res.json({
       success: true,
+      source,
       parsedData: legacyData,
       extractedText,
       message: 'Resume parsed successfully.',

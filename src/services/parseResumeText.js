@@ -130,8 +130,27 @@ export async function parseResumeText(extractedText = '') {
   let data;
   let source;
 
+  function meaningfulProjects(d) {
+    return (d.projects || []).filter(p => {
+      const title = (p.title || '').trim();
+      return title.length > 0 && title !== '—' && title !== '-' && (Array.isArray(p.highlights) && p.highlights.length > 0);
+    }).length;
+  }
+
+  function meaningfulWork(d) {
+    return (d.workExperience || []).filter(w => {
+      const title = (w.jobTitle || '').trim();
+      const org = (w.organization || '').trim();
+      return (title.length > 0 && title !== '—' && title !== '-') || org.length > 0;
+    }).length;
+  }
+
   function scoreData(d) {
-    return (d.skills?.length || 0) + (d.projects?.length || 0) + (d.workExperience || []).filter(w => w.organization && w.jobTitle && w.jobTitle !== '—').length + (d.education?.length || 0);
+    return (d.skills?.length || 0) + meaningfulProjects(d) + meaningfulWork(d) + (d.education?.length || 0);
+  }
+
+  function hasMeaningfulContent(d) {
+    return meaningfulWork(d) > 0;
   }
 
   if (apiKey) {
@@ -145,13 +164,24 @@ export async function parseResumeText(extractedText = '') {
           data = candidate;
           source = 'ai';
         }
-        if (data.skills?.length && data.workExperience?.some(w => w.organization && w.jobTitle && w.jobTitle !== '—')) break;
+        if (hasMeaningfulContent(data)) break;
       } catch (error) {
         console.error(`AI attempt ${attempt + 1} failed:`, error.message);
       }
     }
+
+    // Fallback to heuristic if AI result is empty or has no meaningful work entries
+    if (!data || !hasMeaningfulContent(data)) {
+      console.error('AI produced no meaningful data, falling back to heuristic parser');
+      const heuristicData = normalizeToAffindaSchema(heuristicParseResume(extractedText));
+      if (!data || scoreData(heuristicData) > scoreData(data)) {
+        data = heuristicData;
+        source = 'heuristic';
+      }
+    }
+
     if (!data) {
-      throw new Error('AI parsing failed after 2 attempts');
+      throw new Error('Resume parsing failed — both AI and heuristic returned no data');
     }
   } else {
     source = 'heuristic';
