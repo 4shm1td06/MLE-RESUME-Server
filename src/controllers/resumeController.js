@@ -207,6 +207,41 @@ function buildBaseName(name) {
 // Legacy formatter endpoints (backward compatible)
 // -------------------------------------------------------
 
+function parseAssignmentsProjects(rawText) {
+  const entries = [];
+  const sections = rawText.split(/(?=Project Details:)/);
+  for (const section of sections) {
+    if (!section.includes('Project Details:')) continue;
+    const company = (section.match(/^Company\s+(.+)/m) || [])[1] || '';
+    const duration = (section.match(/^\s*Duration\s+(.+)/m) || [])[1] || (section.match(/^\s*Period\s+(.+)/m) || [])[1] || '';
+    const client = (section.match(/^\s*Customer\s+(.+)/m) || [])[1] || (section.match(/^\s*Client\s+Name\s+(.+)/m) || [])[1] || '';
+    const team = (section.match(/^Team\s+(.+)/m) || [])[1] || '';
+    const role = (section.match(/^Role\s+(.+)/m) || [])[1] || (section.match(/^Position\s+(.+)/m) || [])[1] || '';
+    const project = (section.match(/^Project\s+(?!Details\b|Description\b|titles?\b)([^\n\r\t]+)/m) || [])[1] || (section.match(/^Title\s+(.+)/m) || [])[1] || '';
+    // Extract responsibilities / bullet points
+    const respMatch = section.match(/Role\s*&?\s*Responsibilities:?\s*\n([\s\S]*?)(?=\n\n|\nProject Details:|\nAcademic\s|\nPersonal\s|\n$)/);
+    const responsibilities = respMatch
+      ? respMatch[1].split('\n').map(l => l.replace(/^[•●▪◦❖\-\*]\s*/, '').trim()).filter(Boolean)
+      : [];
+    if (!role && !company && !client) continue;
+    const roleClean = role.replace(/^Working in capacity of\s+|^Worked as\s+/i, '').trim();
+    const title = (project || roleClean).trim().replace(/^It was (?:a|an)\s+/i, '');
+    if (!title) continue;
+    const durationClean = duration
+      .replace(/'/g, '').replace(/\btill\b/i, '-').replace(/\btil\b/i, '-')
+      .replace(/\bnow\b/i, 'Present').replace(/\s+/g, ' ').trim();
+    entries.push({
+      title,
+      role: roleClean,
+      duration: durationClean,
+      contributions: responsibilities,
+      technologies: [],
+      client: (client || company).trim(),
+    });
+  }
+  return entries;
+}
+
 export async function parseResumeController(req, res) {
   try {
     if (!req.file) {
@@ -220,6 +255,12 @@ export async function parseResumeController(req, res) {
 
     const { data: affindaData, source } = await parseResumeText(extractedText);
     const legacyData = affindaToMleSchema(affindaData);
+
+    // Enrich projectExperience with entries from Assignments/Projects section
+    const assignmentProjects = parseAssignmentsProjects(extractedText);
+    if (assignmentProjects.length > 0) {
+      legacyData.projectExperience = assignmentProjects;
+    }
 
     return res.json({
       success: true,
