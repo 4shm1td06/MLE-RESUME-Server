@@ -1,5 +1,5 @@
-const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const apiKey = (process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY)?.trim();
+const AI_URL = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 
 const STOP_WORDS = new Set([
   'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','as','is','was','are','were',
@@ -174,7 +174,7 @@ async function callAiJdMatch(prompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
 
-  const response = await fetch(OPENROUTER_URL, {
+  const response = await fetch(AI_URL, {
     method: 'POST',
     signal: controller.signal,
     headers: {
@@ -182,7 +182,7 @@ async function callAiJdMatch(prompt) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'openrouter/auto',
+      model: process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'mixtral-8x7b-32768',
       messages: [
         { role: 'system', content: 'You are a hiring and ATS optimization expert. Return only valid JSON. No markdown. No explanations.' },
         { role: 'user', content: prompt }

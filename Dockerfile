@@ -13,6 +13,7 @@ RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
+RUN npm run prepare-template
 COPY . .
 RUN chown -R appuser:appuser /app
 USER appuser

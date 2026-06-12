@@ -95,7 +95,9 @@ export async function generatePdf({
     const logoFilePath = path.join(assetsDir, 'mle-logo-2023.png');
     const logoDataUrl = getBase64ImageDataUrl(logoFilePath);
     const watermarkFilePath = path.join(assetsDir, 'mle-watermark.png');
-    const watermarkDataUrl = getBase64ImageDataUrl(watermarkFilePath);
+    const watermarkDataUrl = fs.existsSync(watermarkFilePath)
+      ? getBase64ImageDataUrl(watermarkFilePath)
+      : '';
 
     /*
      * Replace placeholder in the HTML template.

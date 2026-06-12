@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "prepare-template": "node scripts/prepare-template.js"
+    "prepare-template": "node scripts/prepare-template.js",
+    "lint": "node --check src/index.js src/controllers/resumeController.js && echo 'Syntax OK'",
+    "test": "echo 'No tests configured'"
   },
   "dependencies": {
     "cors": "^2.8.5",

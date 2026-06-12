@@ -83,10 +83,11 @@ app.use('/api/resumes/parse', (req, res, next) => {
   next();
 });
 
+// Clean expired entries every 60 seconds
 setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of rateLimitMap) {
-    if (now - entry.windowStart > RATE_LIMIT_WINDOW * 2) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW) {
       rateLimitMap.delete(ip);
     }
   }

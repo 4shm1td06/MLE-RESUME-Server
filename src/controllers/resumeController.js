@@ -22,6 +22,22 @@ import {
   deleteDocument,
 } from '../services/documentStore.js';
 
+function deriveProjectTitle(contribution) {
+  let text = contribution.trim();
+  for (const pattern of [/^Responsible\s+for\s+/i, /^Carrying\s+out\s+/i, /^Handling\s+(?:various\s+)?/i, /^Leading\s+(?:and\s+Managing\s+|the\s+)?/i, /^Managing\s+/i, /^Working\s+(?:on\s+)?/i, /^Gathering\s+/i, /^Worked\s+on\s+/i]) {
+    while (pattern.test(text)) text = text.replace(pattern, '');
+  }
+  const clientProj = text.match(/^([A-Z][a-zA-Z]+)\s+is\s+gearing\s+up\s+towards\s+(.+?)\s+from\s/);
+  if (clientProj) return (clientProj[2].trim() + ' Migration').replace(/  /g, ' ');
+  const stop = new Set(['the','a','an','of','in','for','to','with','on','at','by','from','and','various','different','this','that','their','its','all','into','upon','about','after','before','between','through','during','without','within','along','like','out','new']);
+  const words = text.split(/\s+/)
+    .map(w => w.replace(/^[^a-zA-Z0-9]+/, '').replace(/[^a-zA-Z0-9]+$/, ''))
+    .filter(w => w.length > 1 && !stop.has(w.toLowerCase()));
+  let title = words.slice(0, 4).join(' ');
+  if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
+  return title || text.slice(0, 40);
+}
+
 function affindaToMleSchema(affinda) {
   // Fix swapped company/role when AI puts title in org and org in title
   const fixWorkEntry = (w) => {
@@ -69,31 +85,13 @@ function affindaToMleSchema(affinda) {
       const t = (b.role || '').trim();
       return t.length > 0 && t !== '—' && t !== '-';
     });
-function deriveProjectTitle(contribution) {
-  let text = contribution.trim();
-  // Strip all leading verb phrases
-  for (const pattern of [/^Responsible\s+for\s+/i, /^Carrying\s+out\s+/i, /^Handling\s+(?:various\s+)?/i, /^Leading\s+(?:and\s+Managing\s+|the\s+)?/i, /^Managing\s+/i, /^Working\s+(?:on\s+)?/i, /^Gathering\s+/i, /^Worked\s+on\s+/i]) {
-    while (pattern.test(text)) text = text.replace(pattern, '');
-  }
-  // Client project name pattern
-  const clientProj = text.match(/^([A-Z][a-zA-Z]+)\s+is\s+gearing\s+up\s+towards\s+(.+?)\s+from\s/);
-  if (clientProj) return (clientProj[2].trim() + ' Migration').replace(/  /g, ' ');
-  // Extract key content words
-  const stop = new Set(['the','a','an','of','in','for','to','with','on','at','by','from','and','various','different','this','that','their','its','all','into','upon','about','after','before','between','through','during','without','within','along','like','out','new']);
-  const words = text.split(/\s+/)
-    .map(w => w.replace(/^[^a-zA-Z0-9]+/, '').replace(/[^a-zA-Z0-9]+$/, ''))
-    .filter(w => w.length > 1 && !stop.has(w.toLowerCase()));
-  let title = words.slice(0, 4).join(' ');
-  if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
-  return title || text.slice(0, 40);
-}
 
   // Extract individual project entries from work contributions
   const projectExperience = techFromProjects.length > 0
     ? [...techFromProjects]
     : techFromWork.flatMap(entry =>
         (entry.contributions || []).map(c => {
-          const derived = deriveProjectTitle(c, entry.role);
+          const derived = deriveProjectTitle(c);
           return {
             title: derived,
             role: derived,
@@ -215,7 +213,6 @@ function parseAssignmentsProjects(rawText) {
     const company = (section.match(/^Company\s+(.+)/m) || [])[1] || '';
     const duration = (section.match(/^\s*Duration\s+(.+)/m) || [])[1] || (section.match(/^\s*Period\s+(.+)/m) || [])[1] || '';
     const client = (section.match(/^\s*Customer\s+(.+)/m) || [])[1] || (section.match(/^\s*Client\s+Name\s+(.+)/m) || [])[1] || '';
-    const team = (section.match(/^Team\s+(.+)/m) || [])[1] || '';
     const role = (section.match(/^Role\s+(?!&)(.+)/m) || [])[1] || (section.match(/^Position\s+(.+)/m) || [])[1] || '';
     const project = (section.match(/^Title\s+(.+)/m) || [])[1] || (section.match(/^Project\s+(?!Details\b|Description\b|titles?\b)([^\n\r\t]+)/m) || [])[1] || '';
     // Extract responsibilities / bullet points
