@@ -2,7 +2,7 @@ export function computeConfidence(data = {}, rawText = '', source = 'heuristic')
   const conf = {};
 
   const textQuality = rawText.length > 100 ? 'high' : rawText.length > 20 ? 'medium' : 'low';
-  const aiExtracted = source === 'ai';
+  const aiExtracted = source === 'ai' || source === 'ai-gemini';
 
   const hasValue = (val) => {
     if (val == null) return false;

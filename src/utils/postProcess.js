@@ -1,7 +1,7 @@
 export function postProcessResume(data, rawText, source) {
   if (!data) return data;
   // AI-labeled data should pass through with zero modifications
-  if (source === 'ai') return data;
+  if (source === 'ai' || source === 'ai-gemini') return data;
 
   const lines = (rawText || '').split('\n').map(l => l.trim()).filter(Boolean);
 

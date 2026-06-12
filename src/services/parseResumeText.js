@@ -3,9 +3,10 @@ import { normalizeToAffindaSchema } from '../utils/affindaSchema.js';
 import { postProcessResume } from '../utils/postProcess.js';
 import JSON5 from 'json5';
 
-
-const apiKey = (process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY)?.trim();
+const groqKey = (process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY)?.trim();
+const geminiKey = process.env.GEMINI_API_KEY?.trim();
 const AI_URL = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 function buildAiPrompt(rawText) {
   return `Extract resume data as JSON. Rules:
@@ -25,20 +26,27 @@ Text:
 ${rawText}`.trim();
 }
 
-async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
+async function callAiParser(prompt, provider, attempt = 1, maxRetries = 3) {
+  const isGemini = provider === 'gemini';
+  const url = isGemini ? GEMINI_URL : AI_URL;
+  const key = isGemini ? geminiKey : groqKey;
+  const model = isGemini
+    ? (process.env.GEMINI_MODEL || 'gemini-2.5-flash')
+    : (process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'mixtral-8x7b-32768');
+
   const timeoutMs = 45000 + (attempt - 1) * 10000;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  const response = await fetch(AI_URL, {
+  const headers = { 'Content-Type': 'application/json' };
+  headers['Authorization'] = `Bearer ${key}`;
+
+  const response = await fetch(url, {
     method: 'POST',
     signal: controller.signal,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
+    headers,
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'mixtral-8x7b-32768',
+      model,
       messages: [
         { role: 'system', content: 'You are a resume parser. Return only valid JSON. No markdown. No explanations.' },
         { role: 'user', content: prompt }
@@ -51,19 +59,19 @@ async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
 
   if (response.status === 429 && attempt <= maxRetries) {
     const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
-    console.error(`Rate limited (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+    console.error(`[${provider}] Rate limited (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
     await new Promise(r => setTimeout(r, delay));
-    return callAiParser(prompt, attempt + 1, maxRetries);
+    return callAiParser(prompt, provider, attempt + 1, maxRetries);
   }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => '');
-    throw new Error(`OpenRouter parsing request failed: ${response.status} ${errorText}`);
+    throw new Error(`${provider} parsing request failed: ${response.status} ${errorText}`);
   }
 
   const json = await response.json();
   const text = json?.choices?.[0]?.message?.content || '';
-  if (!text) throw new Error('OpenRouter returned empty parsing result');
+  if (!text) throw new Error(`${provider} returned empty parsing result`);
 
   let jsonStr = text
     .replace(/```json\s*/gi, '')
@@ -72,7 +80,7 @@ async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
 
   const braceStart = jsonStr.indexOf('{');
   if (braceStart < 0) {
-    console.error('AI response: no JSON object found. Raw preview:', text.slice(0, 600));
+    console.error(`${provider} response: no JSON object found. Raw preview:`, text.slice(0, 600));
     throw new Error('No JSON object in AI response');
   }
   jsonStr = jsonStr.slice(braceStart);
@@ -87,7 +95,7 @@ async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
     }
   }
   if (jsonEnd < 0) {
-    console.error('AI response JSON truncated (unclosed braces). Raw preview:', text.slice(0, 600));
+    console.error(`${provider} response JSON truncated (unclosed braces). Raw preview:`, text.slice(0, 600));
     throw new Error('Truncated JSON in AI response (no closing brace)');
   }
   jsonStr = jsonStr.slice(0, jsonEnd + 1);
@@ -105,10 +113,9 @@ async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
   let parsed = tryParse(cleaned) || tryParse(ascii);
 
   if (!parsed) {
-    console.error('AI response could not be parsed after cleaning. Raw JSON:', jsonStr.slice(0, 600));
+    console.error(`${provider} response could not be parsed after cleaning. Raw JSON:`, jsonStr.slice(0, 600));
     throw new Error('Failed to parse AI response as JSON');
   }
-
 
   const isEmpty = !parsed.skills?.length && !parsed.workExperience?.length && !parsed.education?.length && !parsed.certifications?.length;
   const hasSwappedFields = (parsed.workExperience || []).some(w => {
@@ -120,7 +127,7 @@ async function callAiParser(prompt, attempt = 1, maxRetries = 3) {
   if (attempt <= maxRetries && (isEmpty || hasSwappedFields)) {
     const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
     await new Promise(r => setTimeout(r, delay));
-    return callAiParser(prompt, attempt + 1, maxRetries);
+    return callAiParser(prompt, provider, attempt + 1, maxRetries);
   }
 
   return parsed;
@@ -153,21 +160,29 @@ export async function parseResumeText(extractedText = '') {
     return meaningfulWork(d) > 0;
   }
 
-  if (apiKey) {
+  const providers = [];
+  if (groqKey) providers.push('groq');
+  if (geminiKey) providers.push('gemini');
+
+  if (providers.length > 0) {
     const prompt = buildAiPrompt(extractedText);
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
-        const raw = await callAiParser(prompt);
-        const candidate = normalizeToAffindaSchema(raw);
-        if (!data || scoreData(candidate) > scoreData(data)) {
-          data = candidate;
-          source = 'ai';
+
+    for (const provider of providers) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 2000));
+          const raw = await callAiParser(prompt, provider);
+          const candidate = normalizeToAffindaSchema(raw);
+          if (!data || scoreData(candidate) > scoreData(data)) {
+            data = candidate;
+            source = provider === 'gemini' ? 'ai-gemini' : 'ai';
+          }
+          if (data && hasMeaningfulContent(data)) break;
+        } catch (error) {
+          console.error(`[${provider}] Attempt ${attempt + 1} failed:`, error.message);
         }
-        if (hasMeaningfulContent(data)) break;
-      } catch (error) {
-        console.error(`AI attempt ${attempt + 1} failed:`, error.message);
       }
+      if (data && hasMeaningfulContent(data)) break;
     }
 
     // Fallback to heuristic if AI result is empty or has no meaningful work entries
